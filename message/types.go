@@ -87,12 +87,57 @@ func intListDecode(data []byte) (v []int, n int) {
 }
 
 func addressInfoEncode(v *AddressInfo) []byte {
+	data := make([]byte, 34)
+
+	order.PutUint32(data[:4], uint32(v.Time.Unix()))
+	order.PutUint32(data[4:8], uint32(v.Stream))
+	order.PutUint64(data[8:16], v.Services)
+	packIp(data[16:32], v.Ip)
+	order.PutUint16(data[32:34], uint16(v.Port))
+
+	return data
 }
 
 // addressInfoDecode decodes an address info structure from data and
 // returns the it along with the total number of bytes decoded from data.
 // Bytes after the decoded struct are ignored.
 func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
+	return &AddressInfo{
+		Time: time.Unix(int64(order.Uint32(data[:4])), 0),
+		Stream: int(order.Uint32(data[4:8])),
+		Services: order.Uint64(data[8:16]),
+		Ip: unpackIp(data[16:32]),
+		Port: int(order.Uint16(data[32:34])),
+	}
+}
+
+func packIp(data []byte, ip string) {
+	points := strings.Split(ip, ".")
+	if l := len(points); l != 4 {
+		panic("Invalid/unsupported Ip: " + ip)
+	}
+
+	for i := range data[:12] {
+		data[i] = 0
+	}
+
+	data[10] = 0xFF
+	data[11] = 0xFF
+
+	for i, p := range points {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			panic("Invalid Ip: " + ip)
+		}
+		data[i+12] = byte(v)
+	}
+}
+
+func unpackIp(data []byte) string {
+	if data[10] != 0xFF || data[11] != 0xFF {
+		panic(fmt.Sprintf("Invalid/unsupported Ip: %x", data[:16]))
+	}
+	return fmt.Sprintf("%v.%v.%v.%v", data[12:16]...)
 }
 
 type AddressInfo struct {
