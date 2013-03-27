@@ -9,6 +9,7 @@ const (
 	Simple
 )
 
+// VarIntEncode encodes an unsigned int as a variable length int.
 func VarIntEncode(v uint64) []byte {
 	switch {
 	case v < 0xFD:
@@ -31,34 +32,69 @@ func VarIntEncode(v uint64) []byte {
 	}
 }
 
-func VarIntDecode(data []byte) uint64 {
+// VarIntDecode decodes a variable length integer from data and returns the
+// value along with the total number of bytes decoded from data.  Bytes
+// after the decoded value are ignored.
+func VarIntDecode(data []byte) (val uint64, n int) {
 	switch data[0] {
 	case 0xFF:
-		return order.Uint64(data[1:])
+		return order.Uint64(data[1:9]), 9
 	case 0xFE:
-		return uint64(order.Uint32(data[1:]))
+		return uint64(order.Uint32(data[1:5])), 5
 	case 0xFD:
-		return uint64(order.Uint16(data[1:]))
+		return uint64(order.Uint16(data[1:3])), 3
 	default:
-		return uint64(data[0])
+		return uint64(data[0]), 1
 	}
 }
 
-type VarString string
-
-func (v VarString) Val() string {
-	return v
+// VarStrEncode encodes a string as a variable length string
+func VarStrEncode(s string) []byte {
+	return append(VarIntEncode(uint64(len(data))), []byte(data)...)
 }
 
-func (v VarString) Encode() []byte {
-
+// VarStrDecode decodes a variable length string from data and returns the
+// string along with the total number of bytes decoded from data.  Bytes
+// after a decoded VarString are ignored.
+func VarStrDecode(data []byte) (s string, n int) {
+	val, n := VarIntDecode(data)
+	length := int(val)
+	return string(data[n:n+length]), n + length
 }
 
-func (v *VarString) Decode(data []byte) {
-
+// IntListEncode encodes a slice of unsigned integers as a variable length
+// IntList.
+func IntListEncode(vals []uint64) []byte {
+	data := VarIntEncode(uint64(len(v)))
+	for _, v := range vals {
+		data = append(data, VarIntEncode(v)...)
+	}
+	return data
 }
 
-type IntList []*VarInt
+// IntListDecode decodes a variable length IntList from data and returns the
+// a uint slice along with the total number of bytes decoded from data.  Bytes
+// after the decoded list are ignored.
+func IntListDecode(data []byte) (v []uint64, n int) {
+	v, offset := VarIntDecode(data)
+	length := int(v)
+	vals := make([]uint64, length)
+	for i := 0; i < length; i++ {
+		val, n := VarIntDecode(data[offset:])
+		offset += n
+		vals[i] = val
+	}
+	return vals, offset
+}
+
+func AddressInfoEncode(v *AddressInfo) []byte {
+}
+
+// AddressInfoDecode decodes an address info structure from data and
+// returns the it along with the total number of bytes decoded from data.
+// Bytes after the decoded struct are ignored.
+func AddressInfoDecode(data []byte) (v *AddressInfo, n int) {
+}
 
 type AddressInfo struct {
 	Time uint32
