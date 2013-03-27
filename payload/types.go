@@ -1,5 +1,10 @@
 
-package message
+package payload
+
+import (
+	"fmt"
+	"strconv"
+)
 
 type Encoding int
 
@@ -148,9 +153,7 @@ type AddressInfo struct {
 	Port int
 }
 
-type Inventory []byte
-
-type MessageInfo struct {
+type MsgInfo struct {
 	MsgVersion int // VarInt
 	AddrVersion int // VarInt
 	Stream int // VarInt
@@ -165,16 +168,5 @@ type MessageInfo struct {
 	AckData []byte
 	SigLen int // VarInt
 	Signature []byte
-}
-
-type VersionPayload struct {
-	Version int
-	Services uint64
-	Timestamp time.Time
-	FromAddr AddressInfo
-	ToAddr AddressInfo
-	Nonce uint
-	UserAgent string // var_str
-	Streams []int // var_int_list
 }
 
