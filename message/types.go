@@ -9,8 +9,9 @@ const (
 	Simple
 )
 
-// VarIntEncode encodes an unsigned int as a variable length int.
-func VarIntEncode(v uint64) []byte {
+// varIntEncode encodes an int as a variable length int.  v must
+// be positive.
+func varIntEncode(v int) []byte {
 	switch {
 	case v < 0xFD:
 		return []byte{byte(v)}
@@ -27,110 +28,108 @@ func VarIntEncode(v uint64) []byte {
 	default:
 		data = make([]byte, 9)
 		data[0] = 0xFF
-		order.PutUint64(data[1:], v)
+		order.PutUint64(data[1:], uint64(v))
 		return data
 	}
 }
 
-// VarIntDecode decodes a variable length integer from data and returns the
+// varIntDecode decodes a variable length integer from data and returns the
 // value along with the total number of bytes decoded from data.  Bytes
 // after the decoded value are ignored.
-func VarIntDecode(data []byte) (val uint64, n int) {
+func varIntDecode(data []byte) (val int, n int) {
 	switch data[0] {
 	case 0xFF:
-		return order.Uint64(data[1:9]), 9
+		return int(order.Uint64(data[1:9])), 9
 	case 0xFE:
-		return uint64(order.Uint32(data[1:5])), 5
+		return int(order.Uint32(data[1:5])), 5
 	case 0xFD:
-		return uint64(order.Uint16(data[1:3])), 3
+		return int(order.Uint16(data[1:3])), 3
 	default:
-		return uint64(data[0]), 1
+		return int(data[0]), 1
 	}
 }
 
-// VarStrEncode encodes a string as a variable length string
-func VarStrEncode(s string) []byte {
-	return append(VarIntEncode(uint64(len(data))), []byte(data)...)
+// varStrEncode encodes a string as a variable length string.
+func varStrEncode(s string) []byte {
+	return append(varIntEncode(len(data)), []byte(data)...)
 }
 
-// VarStrDecode decodes a variable length string from data and returns the
+// varStrDecode decodes a variable length string from data and returns the
 // string along with the total number of bytes decoded from data.  Bytes
 // after a decoded VarString are ignored.
-func VarStrDecode(data []byte) (s string, n int) {
-	val, n := VarIntDecode(data)
-	length := int(val)
+func varStrDecode(data []byte) (s string, n int) {
+	length, n := varIntDecode(data)
 	return string(data[n:n+length]), n + length
 }
 
-// IntListEncode encodes a slice of unsigned integers as a variable length
-// IntList.
-func IntListEncode(vals []uint64) []byte {
-	data := VarIntEncode(uint64(len(v)))
+// intListEncode encodes a slice of integers as a variable length
+// IntList. All integers must be positive.
+func intListEncode(vals []int) []byte {
+	data := varIntEncode(len(v))
 	for _, v := range vals {
-		data = append(data, VarIntEncode(v)...)
+		data = append(data, varIntEncode(v)...)
 	}
 	return data
 }
 
-// IntListDecode decodes a variable length IntList from data and returns the
-// a uint slice along with the total number of bytes decoded from data.  Bytes
+// intListDecode decodes a variable length IntList from data and returns the
+// an int slice along with the total number of bytes decoded from data.  Bytes
 // after the decoded list are ignored.
-func IntListDecode(data []byte) (v []uint64, n int) {
-	v, offset := VarIntDecode(data)
-	length := int(v)
-	vals := make([]uint64, length)
+func intListDecode(data []byte) (v []int, n int) {
+	length, offset := varIntDecode(data)
+	vals := make([]int, length)
 	for i := 0; i < length; i++ {
-		val, n := VarIntDecode(data[offset:])
+		val, n := varIntDecode(data[offset:])
 		offset += n
 		vals[i] = val
 	}
 	return vals, offset
 }
 
-func AddressInfoEncode(v *AddressInfo) []byte {
+func addressInfoEncode(v *AddressInfo) []byte {
 }
 
-// AddressInfoDecode decodes an address info structure from data and
+// addressInfoDecode decodes an address info structure from data and
 // returns the it along with the total number of bytes decoded from data.
 // Bytes after the decoded struct are ignored.
-func AddressInfoDecode(data []byte) (v *AddressInfo, n int) {
+func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 }
 
 type AddressInfo struct {
-	Time uint32
-	Stream uint32
+	Time time.Time
+	Stream int
 	Services uint64
-	Ip []byte
-	Port uint16
+	Ip string
+	Port int
 }
 
 type Inventory []byte
 
 type MessageInfo struct {
-	MsgVersion uint64 // VarInt
-	AddrVersion uint64 // VarInt
-	Stream uint64 // VarInt
+	MsgVersion int // VarInt
+	AddrVersion int // VarInt
+	Stream int // VarInt
 	Behavior uint32
 	SignKey []byte
 	EncryptKey []byte
 	DestRipe []byte
-	Encoding uint64 // VarInt
-	MsgLen uint64 // VarInt
+	Encoding int // VarInt
+	MsgLen int // VarInt
 	Content []byte
-	AckLen uint64 // VarInt
+	AckLen int // VarInt
 	AckData []byte
-	SigLen uint64 // VarInt
+	SigLen int // VarInt
 	Signature []byte
 }
 
 type VersionPayload struct {
-	Version uint64
+	Version int
 	Services uint64
-	Timestamp int64
+	Timestamp time.Time
 	FromAddr AddressInfo
 	ToAddr AddressInfo
-	Nonce uint64
+	Nonce uint
 	UserAgent string // var_str
-	Streams []uint64 // var_int_list
+	Streams []int // var_int_list
 }
 
