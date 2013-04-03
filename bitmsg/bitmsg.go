@@ -1,4 +1,3 @@
-
 package bitmsg
 
 const (
@@ -24,7 +23,6 @@ func (s *NodeSet) InStream(stream int) []*Node {
 }
 
 type Node struct {
-	Stream int
+	Stream  int
 	Friends *NodeSet
 }
-

@@ -15,7 +15,7 @@ type Version struct {
 	Timestamp time.Time
 	ToAddr    *AddressInfo
 	FromAddr  *AddressInfo
-	Nonce     uint
+	Nonce     uint64
 	UserAgent string // var_str
 	Streams   []int  // var_int_list
 }
@@ -37,7 +37,7 @@ func EncodeVersion(v *Version) []byte {
 	data = append(data, addressInfoEncode(v.FromAddr)...)
 
 	tmp = make([]byte, 8)
-	order.PutUint64(tmp, uint64(v.Nonce))
+	order.PutUint64(tmp, v.Nonce)
 	data = append(data, tmp...)
 
 	data = append(data, varStrEncode(v.UserAgent)...)
@@ -65,7 +65,7 @@ func DecodeVersion(data []byte) *Version {
 	v.FromAddr, n = addressInfoDecode(data[offset:])
 	offset += n
 
-	v.Nonce = uint(order.Uint64(data[offset : offset+8]))
+	v.Nonce = order.Uint64(data[offset : offset+8])
 	offset += 8
 
 	v.UserAgent, n = varStrDecode(data[offset:])
@@ -140,4 +140,58 @@ func DecodeGetData(data []byte) [][]byte {
 		hashes = append(hashes, data[start:end])
 	}
 	return hashes
+}
+
+type GetPubKey struct {
+	PowNonce    uint64
+	Time        time.Time // uint32
+	AddrVersion int       // var_int
+	Stream      int       // var_int
+	RipeHash    []byte    // len=20
+}
+
+func EncodeGetPubkey(g *GetPubKey) []byte {
+	data := make([]byte, 8)
+	order.PutUint64(data, g.PowNonce)
+
+	tmp := make([]byte, 4)
+	order.PutUint32(tmp, uint32(g.Time.Unix()))
+	data = append(data, tmp...)
+
+	data = append(data, varIntEncode(g.AddrVersion)...)
+	data = append(data, varIntEncode(g.Stream)...)
+	data = append(data, g.Hash...)
+
+	return data
+}
+
+func DecodeGetPubKey(data []byte) *GetPubKey {
+	g := &GetPubKey{}
+
+	g.PowNonce = order.Uint64(data[:8])
+	offset := 8
+
+	g.Time = time.Unix(order.Uint64(data[offset:offset+4]), 0)
+	offset += 4
+
+	var n int
+	g.AddrVersion, n = varIntDecode(data[offset:])
+	offset += n
+
+	g.Stream, n = varIntDecode(data[offset:])
+	offset += n
+
+	g.RipeHash = data[offset:]
+
+	return g
+}
+
+type PubKey struct {
+	PowNonce    uint64
+	Time        time.Time // uint32
+	AddrVersion int       // var_int
+	Stream      int       // var_int
+	Behavior    uint32    // bitfield
+	SignKey     []byte    // len=64
+	EncryptKey  []byte    // len=64
 }
