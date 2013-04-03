@@ -6,12 +6,11 @@ import (
 	"strconv"
 )
 
-type Encoding int
-
+// Message encodings
 const (
-	Ignore Encoding = iota
-	Trivial
-	Simple
+	EncIgnore = iota
+	EncTrivial
+	EncSimple
 )
 
 // varIntEncode encodes an int as a variable length int.  v must
@@ -91,6 +90,14 @@ func intListDecode(data []byte) (v []int, n int) {
 	return vals, offset
 }
 
+type AddressInfo struct {
+	Time time.Time
+	Stream int
+	Services uint64
+	Ip string
+	Port int
+}
+
 func addressInfoEncode(v *AddressInfo) []byte {
 	data := make([]byte, 34)
 
@@ -145,14 +152,6 @@ func unpackIp(data []byte) string {
 	return fmt.Sprintf("%v.%v.%v.%v", data[12:16]...)
 }
 
-type AddressInfo struct {
-	Time time.Time
-	Stream int
-	Services uint64
-	Ip string
-	Port int
-}
-
 type MsgInfo struct {
 	MsgVersion int // VarInt
 	AddrVersion int // VarInt
@@ -168,5 +167,94 @@ type MsgInfo struct {
 	AckData []byte
 	SigLen int // VarInt
 	Signature []byte
+}
+
+func msgInfoEncode(m *MsgInfo) []byte {
+	data := varIntEncode(m.MsgVersion)
+	data = append(data, varIntEncode(m.AddrVersion)...)
+	data = append(data, varIntEncode(m.Stream)...)
+
+	tmp := make([]byte, 4)
+	order.PutUint32(tmp, m.Behavior)
+	data = append(data, tmp...)
+
+	data = append(data, m.SignKey...)
+	data = append(data, m.EncryptKey...)
+	data = append(data, m.DestRipe...)
+	data = append(data, varIntEncode(m.Encoding)...)
+	data = append(data, varIntEncode(m.MsgLen)...)
+	data = append(data, m.Content...)
+	data = append(data, varIntEncode(m.AckLen)...)
+	data = append(data, m.AckData...)
+	data = append(data, varIntEncode(m.SigLen)...)
+	data = append(data, m.Signature...)
+
+	return data
+}
+
+func msgInfoDecode(data []byte) *MsgInfo {
+	m := &MsgInfo{}
+
+	v, offset := varIntDecode(data)
+	m.MsgVersion = v
+
+	v, n := varIntDecode(data[offset:])
+	m.AddrVersion = v
+	offset += n
+
+	v, n = varIntDecode(data[offset:])
+	m.Stream = v
+	offset += n
+
+	v = order.Uint32(data[offset:offset+4])
+	m.Stream = v
+	offset += 4
+
+	tmp := make([]byte, 0, 64)
+	tmp = append(tmp, data[offset:offset+64]...)
+	m.SignKey = tmp
+	offset += 64
+
+	tmp = make([]byte, 0, 64)
+	tmp = append(tmp, data[offset:offset+64]...)
+	m.EncryptKey = tmp
+	offset += 64
+
+	tmp = make([]byte, 0, 20)
+	tmp = append(tmp, data[offset:offset+20]...)
+	m.EncryptKey = tmp
+	offset += 20
+
+	v, n = varIntDecode(data[offset:])
+	m.Encoding = v
+	offset += n
+
+	v, n = varIntDecode(data[offset:])
+	m.MsgLen = v
+	offset += n
+
+	tmp = make([]byte, 0, m.MsgLen)
+	tmp = append(tmp, data[offset:offset+m.MsgLen]...)
+	m.Content = tmp
+	offset += m.MsgLen
+
+	v, n = varIntDecode(data[offset:])
+	m.AckLen = v
+	offset += n
+
+	tmp = make([]byte, 0, m.AckLen)
+	tmp = append(tmp, data[offset:offset+m.AckLen]...)
+	m.AckData = tmp
+	offset += m.AckLen
+
+	v, n = varIntDecode(data[offset:])
+	m.SigLen = v
+	offset += n
+
+	tmp = make([]byte, 0, m.SigLen)
+	tmp = append(tmp, data[offset:offset+m.SigLen]...)
+	m.Signature = tmp
+
+	return m
 }
 

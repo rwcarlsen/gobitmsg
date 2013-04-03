@@ -12,6 +12,19 @@ const (
 	Hash = crypto.SHA512
 )
 
+// message types
+const (
+	Version = "version"
+	VersionAck = "verack"
+	Address = "addr"
+	Inventory = "inv"
+	GetData = "getdata"
+	GetPubKey = "getpubkey"
+	PubKey = "pubkey"
+	Message = "msg"
+	Broadcast = "broadcast"
+)
+
 var order = binary.BigEndian
 
 type Message interface {
