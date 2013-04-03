@@ -1,4 +1,3 @@
-
 package payload
 
 import (
@@ -63,7 +62,7 @@ func varStrEncode(s string) []byte {
 // after a decoded VarString are ignored.
 func varStrDecode(data []byte) (s string, n int) {
 	length, n := varIntDecode(data)
-	return string(data[n:n+length]), n + length
+	return string(data[n : n+length]), n + length
 }
 
 // intListEncode encodes a slice of integers as a variable length
@@ -91,11 +90,11 @@ func intListDecode(data []byte) (v []int, n int) {
 }
 
 type AddressInfo struct {
-	Time time.Time
-	Stream int
+	Time     time.Time
+	Stream   int
 	Services uint64
-	Ip string
-	Port int
+	Ip       string
+	Port     int
 }
 
 func addressInfoEncode(v *AddressInfo) []byte {
@@ -115,11 +114,11 @@ func addressInfoEncode(v *AddressInfo) []byte {
 // Bytes after the decoded struct are ignored.
 func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 	return &AddressInfo{
-		Time: time.Unix(int64(order.Uint32(data[:4])), 0),
-		Stream: int(order.Uint32(data[4:8])),
+		Time:     time.Unix(int64(order.Uint32(data[:4])), 0),
+		Stream:   int(order.Uint32(data[4:8])),
 		Services: order.Uint64(data[8:16]),
-		Ip: unpackIp(data[16:32]),
-		Port: int(order.Uint16(data[32:34])),
+		Ip:       unpackIp(data[16:32]),
+		Port:     int(order.Uint16(data[32:34])),
 	}
 }
 
@@ -153,22 +152,25 @@ func unpackIp(data []byte) string {
 }
 
 type MsgInfo struct {
-	MsgVersion int // VarInt
+	MsgVersion  int // VarInt
 	AddrVersion int // VarInt
-	Stream int // VarInt
-	Behavior uint32
-	SignKey []byte
-	EncryptKey []byte
-	DestRipe []byte
-	Encoding int // VarInt
-	MsgLen int // VarInt
-	Content []byte
-	AckLen int // VarInt
-	AckData []byte
-	SigLen int // VarInt
-	Signature []byte
+	Stream      int // VarInt
+	Behavior    uint32
+	SignKey     []byte
+	EncryptKey  []byte
+	DestRipe    []byte
+	Encoding    int // VarInt
+	MsgLen      int // VarInt
+	Content     []byte
+	AckLen      int // VarInt
+	AckData     []byte
+	SigLen      int // VarInt
+	Signature   []byte
 }
 
+// msgInfoEncode decodes and returns a MsgInfo struct from data along with the
+// total number of bytes decoded from data.  Bytes after the decoded MsgInfo
+// struct are ignored.
 func msgInfoEncode(m *MsgInfo) []byte {
 	data := varIntEncode(m.MsgVersion)
 	data = append(data, varIntEncode(m.AddrVersion)...)
@@ -206,7 +208,7 @@ func msgInfoDecode(data []byte) *MsgInfo {
 	m.Stream = v
 	offset += n
 
-	v = order.Uint32(data[offset:offset+4])
+	v = order.Uint32(data[offset : offset+4])
 	m.Stream = v
 	offset += 4
 
@@ -257,4 +259,3 @@ func msgInfoDecode(data []byte) *MsgInfo {
 
 	return m
 }
-

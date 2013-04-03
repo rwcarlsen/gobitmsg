@@ -1,4 +1,3 @@
-
 package message
 
 import (
@@ -9,26 +8,28 @@ import (
 
 const (
 	Magic = 0xE9BEB4D9
-	Hash = crypto.SHA512
+	Hash  = crypto.SHA512
 )
+
+type Command string
 
 // message types
 const (
-	Version = "version"
-	VersionAck = "verack"
-	Address = "addr"
-	Inventory = "inv"
-	GetData = "getdata"
-	GetPubKey = "getpubkey"
-	PubKey = "pubkey"
-	Message = "msg"
-	Broadcast = "broadcast"
+	Version    Command = "version"
+	VersionAck         = "verack"
+	Address            = "addr"
+	Inventory          = "inv"
+	GetData            = "getdata"
+	GetPubKey          = "getpubkey"
+	PubKey             = "pubkey"
+	Message            = "msg"
+	Broadcast          = "broadcast"
 )
 
-var order = binary.BigEndian
+var Order = binary.BigEndian
 
 type Message interface {
-	Command() string
+	Cmd() string
 	Payload() []byte
 	Len() uint32
 	Checksum() uint32
@@ -36,7 +37,7 @@ type Message interface {
 }
 
 type msg struct {
-	magic uint32
+	magic   uint32
 	command string
 	payload []byte
 	// length of the payload
@@ -45,20 +46,20 @@ type msg struct {
 	checksum uint32
 }
 
-func New(cmd string, payload []byte) Message {
+func New(cmd Command, payload []byte) Message {
 	h := Hash.New()
 	_, err := h.Write(payload)
 	if err != nil {
 		panic(err)
 	}
 	slice := h.Sum(nil)
-	sum := order.Uint32(slice[:4])
+	sum := Order.Uint32(slice[:4])
 
 	return &msg{
-		magic: Magic,
-		command: cmd,
-		payload: payload,
-		length: uint32(len(payload)),
+		magic:    Magic,
+		command:  cmd,
+		payload:  payload,
+		length:   uint32(len(payload)),
 		checksum: sum,
 	}
 }
@@ -67,7 +68,7 @@ func (m *msg) Magic() uint32 {
 	return m.magic
 }
 
-func (m *msg) Command() string {
+func (m *msg) Cmd() Command {
 	return m.command
 }
 
@@ -84,23 +85,23 @@ func (m *msg) Checksum() uint32 {
 }
 
 func Encode(m Message) []byte {
-	data := make([]byte, 24, 24 + m.Len())
-	cmd := nullPad([]byte(m.Command()), 12)
+	data := make([]byte, 24, 24+m.Len())
+	cmd := nullPad([]byte(m.Cmd()), 12)
 
-	order.PutUint32(data[:4], m.Magic())
+	Order.PutUint32(data[:4], m.Magic())
 	copy(data[4:16], cmd)
-	order.PutUint32(data[16:20], m.Len())
-	order.PutUint32(data[20:24], m.Checksum())
+	Order.PutUint32(data[16:20], m.Len())
+	Order.PutUint32(data[20:24], m.Checksum())
 	return append(data, m.Payload()...)
 }
 
 func Decode(data []byte) Message {
 	return &msg{
-		magic: order.Uint32(data[:4]),
-		command: string(nullUnpad(data[4:16])),
-		length: order.Uint32(data[16:20]),
-		checksum: order.Uint32(data[20:24]),
-		payload: data[24:],
+		magic:    Order.Uint32(data[:4]),
+		command:  string(nullUnpad(data[4:16])),
+		length:   Order.Uint32(data[16:20]),
+		checksum: Order.Uint32(data[20:24]),
+		payload:  data[24:],
 	}
 }
 
@@ -136,6 +137,5 @@ func isChecksumValid(m Message) bool {
 		panic(err)
 	}
 
-	return order.Uint32(h.Sum(nil)[:4]) == m.Checksum()
+	return Order.Uint32(h.Sum(nil)[:4]) == m.Checksum()
 }
-
