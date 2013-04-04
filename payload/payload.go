@@ -47,8 +47,8 @@ func (v *Version) Encode() []byte {
 	data := packUint(order, uint32(v.Ver))
 	data = append(data, packUint(order, v.Services)...)
 	data = append(data, packUint(order, v.Timestamp.Unix())...)
-	data = append(data, addressInfoEncode(v.ToAddr)...)
-	data = append(data, addressInfoEncode(v.FromAddr)...)
+	data = append(data, v.ToAddr.encodeShort()...)
+	data = append(data, v.FromAddr.encodeShort()...)
 	data = append(data, packUint(order, v.Nonce)...)
 	data = append(data, varStrEncode(v.UserAgent)...)
 	data = append(data, intListEncode(v.Streams)...)
@@ -66,10 +66,10 @@ func (v *Version) Decode(data []byte) {
 	v.Timestamp = time.Unix(sec, 0)
 	offset += 8
 
-	v.ToAddr, n = addressInfoDecode(data[offset:])
+	v.ToAddr, n = addressInfoDecodeShort(data[offset:])
 	offset += n
 
-	v.FromAddr, n = addressInfoDecode(data[offset:])
+	v.FromAddr, n = addressInfoDecodeShort(data[offset:])
 	offset += n
 
 	v.Nonce = order.Uint64(data[offset : offset+8])
