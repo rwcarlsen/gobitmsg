@@ -1,8 +1,11 @@
 package payload
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // Message encodings
@@ -33,7 +36,7 @@ func packUint(order binary.ByteOrder, v interface{}) (data []byte) {
 
 // varIntEncode encodes an int as a variable length int.  v must
 // be positive.
-func varIntEncode(v int) []byte {
+func varIntEncode(v int) (data []byte) {
 	switch {
 	case v < 0xFD:
 		return []byte{byte(v)}
@@ -53,6 +56,7 @@ func varIntEncode(v int) []byte {
 		order.PutUint64(data[1:], uint64(v))
 		return data
 	}
+	panic("not reached")
 }
 
 // varIntDecode decodes a variable length integer from data and returns the
@@ -69,6 +73,7 @@ func varIntDecode(data []byte) (val int, n int) {
 	default:
 		return int(data[0]), 1
 	}
+	panic("not reached")
 }
 
 // varStrEncode encodes a string as a variable length string.
@@ -87,7 +92,7 @@ func varStrDecode(data []byte) (s string, n int) {
 // intListEncode encodes a slice of integers as a variable length
 // IntList. All integers must be positive.
 func intListEncode(vals []int) []byte {
-	data := varIntEncode(len(v))
+	data := varIntEncode(len(vals))
 	for _, v := range vals {
 		data = append(data, varIntEncode(v)...)
 	}
@@ -188,7 +193,7 @@ func unpackIp(data []byte) string {
 	if data[10] != 0xFF || data[11] != 0xFF {
 		panic(fmt.Sprintf("Invalid/unsupported Ip: %x", data[:16]))
 	}
-	return fmt.Sprintf("%v.%v.%v.%v", data[12:16]...)
+	return fmt.Sprintf("%d.%d.%d.%d", data[12], data[13], data[14], data[15])
 }
 
 type MsgInfo struct {
@@ -244,8 +249,7 @@ func msgInfoDecode(data []byte) *MsgInfo {
 	m.Stream = v
 	offset += n
 
-	v = order.Uint32(data[offset : offset+4])
-	m.Stream = v
+	m.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
 	tmp := make([]byte, 0, 64)

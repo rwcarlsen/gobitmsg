@@ -2,6 +2,8 @@ package payload
 
 import (
 	"crypto/sha512"
+	"errors"
+	"math"
 	"math/rand"
 	"time"
 
@@ -30,8 +32,8 @@ func proofOfWork(data []byte) (nonce uint64, err error) {
 	h.Write(data)
 	kernel := h.Sum(nil)
 
-	trial := math.MaxUint64
-	target := math.MaxUint64 / ((len(data) + PowExtraLen + 8) * PowTrialsPerByte)
+	trial := uint64(math.MaxUint64)
+	target := math.MaxUint64 / ((uint64(len(data)) + PowExtraLen + 8) * PowTrialsPerByte)
 	for nonce = 0; trial > target; nonce++ {
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
@@ -88,10 +90,11 @@ func (v *Version) Decode(data []byte) {
 	v.Services = order.Uint64(data[offset : offset+8])
 	offset += 8
 
-	sec = order.Uint64(data[offset : offset+8])
+	sec := int64(order.Uint64(data[offset : offset+8]))
 	v.Timestamp = time.Unix(sec, 0)
 	offset += 8
 
+	var n int
 	v.ToAddr, n = addressInfoDecodeShort(data[offset:])
 	offset += n
 
@@ -111,13 +114,14 @@ func AddrEncode(addresses []*AddressInfo) []byte {
 	data := varIntEncode(len(addresses))
 
 	for _, addr := range addresses {
-		data = append(data, addressInfoEncode(addr)...)
+		data = append(data, addr.encode()...)
 	}
+	return data
 }
 
 func AddrDecode(data []byte) []*AddressInfo {
 	nAddr, offset := varIntDecode(data)
-	addresses = make([]*AddressInfo, nAddr)
+	addresses := make([]*AddressInfo, nAddr)
 	for i := 0; i < nAddr; i++ {
 		addr, n := addressInfoDecode(data[offset:])
 		addresses[i] = addr
@@ -145,11 +149,11 @@ func InventoryEncode(objData [][]byte) []byte {
 
 func InventoryDecode(data []byte) [][]byte {
 	nObj, offset := varIntDecode(data)
-	objData = make([][]byte, nObj)
+	objData := make([][]byte, nObj)
 	for i := 0; i < nObj; i++ {
 		start := offset + i*32
 		end := start + 32
-		objData = append(objData, data[start:end])
+		objData[i] = data[start:end]
 	}
 	return objData
 }
@@ -164,7 +168,7 @@ func GetDataEncode(hashes [][]byte) []byte {
 
 func GetDataDecode(data []byte) [][]byte {
 	nHashes, offset := varIntDecode(data)
-	hashes = make([][]byte, nHashes)
+	hashes := make([][]byte, nHashes)
 	for i := 0; i < nHashes; i++ {
 		start := offset + i*32
 		end := start + 32
@@ -194,7 +198,7 @@ func (g *GetPubKey) Decode(data []byte) {
 	g.PowNonce = order.Uint64(data[:8])
 	offset := 8
 
-	g.Time = time.Unix(order.Uint64(data[offset:offset+4]), 0)
+	g.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
@@ -232,7 +236,7 @@ func (k *PubKey) Decode(data []byte) {
 	k.PowNonce = order.Uint64(data[:8])
 	offset := 8
 
-	k.Time = time.Unix(order.Uint64(data[offset:offset+4]), 0)
+	k.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
@@ -271,11 +275,11 @@ func (m *Message) Decode(data []byte) {
 	m.PowNonce = order.Uint64(data[:8])
 	offset := 8
 
-	m.Time = time.Unix(order.Uint64(data[offset:offset+4]), 0)
+	m.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
-	k.Stream, n = varIntDecode(data[offset:])
+	m.Stream, n = varIntDecode(data[offset:])
 	offset += n
 
 	m.Data = data[offset:]

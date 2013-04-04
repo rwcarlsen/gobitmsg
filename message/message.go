@@ -23,14 +23,14 @@ const (
 	GetData            = "getdata"
 	GetPubKey          = "getpubkey"
 	PubKey             = "pubkey"
-	Message            = "msg"
+	Msg                = "msg"
 	Broadcast          = "broadcast"
 )
 
 var Order = binary.BigEndian
 
 type Message interface {
-	Cmd() string
+	Cmd() Command
 	Payload() []byte
 	Len() uint32
 	Checksum() uint32
@@ -39,7 +39,7 @@ type Message interface {
 
 type msg struct {
 	magic   uint32
-	command string
+	command Command
 	payload []byte
 	// length of the payload
 	length uint32
@@ -99,7 +99,7 @@ func Encode(m Message) []byte {
 func Decode(data []byte) Message {
 	return &msg{
 		magic:    Order.Uint32(data[:4]),
-		command:  string(nullUnpad(data[4:16])),
+		command:  Command(nullUnpad(data[4:16])),
 		length:   Order.Uint32(data[16:20]),
 		checksum: Order.Uint32(data[20:24]),
 		payload:  data[24:],
@@ -107,7 +107,7 @@ func Decode(data []byte) Message {
 }
 
 func nullPad(data []byte, totLen int) []byte {
-	padded = append([]byte{}, data...)
+	padded := append([]byte{}, data...)
 	for len(padded) < totLen {
 		padded = append(padded, 0x00)
 	}
@@ -124,7 +124,7 @@ func nullUnpad(data []byte) []byte {
 }
 
 func IsValid(m Message) bool {
-	validLen := m.Len() == len(m.Payload())
+	validLen := int(m.Len()) == len(m.Payload())
 	validSum := isChecksumValid(m)
 	validMagic := m.Magic() == Magic
 
