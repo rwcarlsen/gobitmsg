@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	Magic = 0xE9BEB4D9
-	Hash  = crypto.SHA512
+	Magic           = 0xE9BEB4D9
+	Hash            = crypto.SHA512
+	ProtocolVersion = 1
 )
 
 type Command string

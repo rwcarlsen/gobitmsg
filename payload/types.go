@@ -54,7 +54,7 @@ func varIntDecode(data []byte) (val int, n int) {
 
 // varStrEncode encodes a string as a variable length string.
 func varStrEncode(s string) []byte {
-	return append(varIntEncode(len(data)), []byte(data)...)
+	return append(varIntEncode(len(s)), []byte(s)...)
 }
 
 // varStrDecode decodes a variable length string from data and returns the
