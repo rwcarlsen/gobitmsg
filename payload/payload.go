@@ -44,28 +44,14 @@ func NewVersion(userAgent string, streams []int, from, to *AddressInfo) *Version
 }
 
 func (v *Version) Encode() []byte {
-	tmp := make([]byte, 4)
-	order.PutUint32(tmp, uint32(v.Services))
-	data := append(data, tmp...)
-
-	tmp = make([]byte, 8)
-	order.PutUint64(tmp, v.Services)
-	data = append(data, tmp...)
-
-	tmp = make([]byte, 8)
-	order.PutUint64(tmp, v.Timestamp.Unix())
-	data = append(data, tmp...)
-
+	data := packUint(order, uint32(v.Ver))
+	data = append(data, packUint(order, v.Services)...)
+	data = append(data, packUint(order, v.Timestamp.Unix())...)
 	data = append(data, addressInfoEncode(v.ToAddr)...)
 	data = append(data, addressInfoEncode(v.FromAddr)...)
-
-	tmp = make([]byte, 8)
-	order.PutUint64(tmp, v.Nonce)
-	data = append(data, tmp...)
-
+	data = append(data, packUint(order, v.Nonce)...)
 	data = append(data, varStrEncode(v.UserAgent)...)
 	data = append(data, intListEncode(v.Streams)...)
-
 	return data
 }
 
@@ -170,17 +156,11 @@ type GetPubKey struct {
 }
 
 func (g *GetPubKey) Encode() []byte {
-	data := make([]byte, 8)
-	order.PutUint64(data, g.PowNonce)
-
-	tmp := make([]byte, 4)
-	order.PutUint32(tmp, uint32(g.Time.Unix()))
-	data = append(data, tmp...)
-
+	data := packUint(order, g.PowNonce)
+	data = append(data, packUint(order, uint32(g.Time.Unix()))...)
 	data = append(data, varIntEncode(g.AddrVersion)...)
 	data = append(data, varIntEncode(g.Stream)...)
 	data = append(data, g.RipeHash...)
-
 	return data
 }
 
@@ -212,23 +192,13 @@ type PubKey struct {
 }
 
 func (k *PubKey) Encode() []byte {
-	data := make([]byte, 8)
-	order.PutUint64(data, k.PowNonce)
-
-	tmp := make([]byte, 4)
-	order.PutUint32(tmp, uint32(k.Time.Unix()))
-	data = append(data, tmp...)
-
+	data := packUint(order, k.PowNonce)
+	data = append(data, packUint(order, uint32(k.Time.Unix()))...)
 	data = append(data, varIntEncode(k.AddrVersion)...)
 	data = append(data, varIntEncode(k.Stream)...)
-
-	tmp = make([]byte, 4)
-	order.PutUint32(tmp, k.Behavior())
-	data = append(data, tmp...)
-
+	data = append(data, packUint(order, k.Behavior)...)
 	data = append(data, k.SignKey...)
 	data = append(data, k.EncryptKey...)
-
 	return data
 }
 
@@ -263,13 +233,8 @@ type Message struct {
 }
 
 func (m *Message) Encode() []byte {
-	data := make([]byte, 8)
-	order.PutUint64(data, m.PowNonce)
-
-	tmp := make([]byte, 4)
-	order.PutUint32(tmp, uint32(m.Time.Unix()))
-	data = append(data, tmp...)
-
+	data := packUint(order, m.PowNonce)
+	data = append(data, packUint(order, uint32(m.Time.Unix()))...)
 	data = append(data, varIntEncode(m.Stream)...)
 	data = append(data, m.Data...)
 
@@ -306,5 +271,3 @@ type Broadcast struct {
 	SigLen           int // var_int
 	Signature        []byte
 }
-
-

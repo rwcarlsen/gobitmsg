@@ -12,6 +12,25 @@ const (
 	EncSimple
 )
 
+func packUint(order binary.ByteOrder, v interface{}) (data []byte) {
+	switch val := v.(type) {
+	case uint64:
+		data = make([]byte, 8)
+		order.PutUint64(data, val)
+	case uint32:
+		data = make([]byte, 4)
+		order.PutUint32(data, val)
+	case uint16:
+		data = make([]byte, 2)
+		order.PutUint16(data, val)
+	case uint8:
+		data = []byte{byte(val)}
+	default:
+		panic("unsupported type")
+	}
+	return data
+}
+
 // varIntEncode encodes an int as a variable length int.  v must
 // be positive.
 func varIntEncode(v int) []byte {
@@ -175,11 +194,7 @@ func msgInfoEncode(m *MsgInfo) []byte {
 	data := varIntEncode(m.MsgVersion)
 	data = append(data, varIntEncode(m.AddrVersion)...)
 	data = append(data, varIntEncode(m.Stream)...)
-
-	tmp := make([]byte, 4)
-	order.PutUint32(tmp, m.Behavior)
-	data = append(data, tmp...)
-
+	data = append(data, packUint(order, m.Behavior)...)
 	data = append(data, m.SignKey...)
 	data = append(data, m.EncryptKey...)
 	data = append(data, m.DestRipe...)

@@ -2398,6 +2398,7 @@ class singleWorker(QThread):
             sqlLock.release()
 
 
+# POW Function
     def requestPubKey(self,addressVersionNumber,streamNumber,ripe):
         payload = pack('>I',int(time.time()))
         payload += encodeVarint(addressVersionNumber)
