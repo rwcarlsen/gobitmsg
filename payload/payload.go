@@ -15,7 +15,8 @@ var RandNonce = uint64(rand.Uint32())
 
 // proofOfWork returns a verifiable proof-of-work hash for data.
 func proofOfWork(data []byte) []byte {
-
+	fuzz := (rand.Float64() - 0.5) * 300
+	t := time.Now().Unix() + fuzz
 }
 
 type Version struct {
@@ -305,3 +306,5 @@ type Broadcast struct {
 	SigLen           int // var_int
 	Signature        []byte
 }
+
+
