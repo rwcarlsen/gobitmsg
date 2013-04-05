@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/rwcarlsen/gobitmsg/message"
 	"github.com/rwcarlsen/gobitmsg/payload"
 )
 
@@ -19,7 +18,6 @@ func fuzzTime() time.Time {
 
 func Version(userAgent string, streams []int, from, to *payload.AddressInfo) []byte {
 	v := &payload.Version{
-		Ver:       message.ProtocolVersion,
 		Services:  1,
 		Timestamp: time.Now(),
 		ToAddr:    to,

@@ -37,7 +37,7 @@ func proofOfWork(data []byte) (nonce uint64) {
 }
 
 type Version struct {
-	Ver       int
+	protocol  uint32
 	Services  uint64
 	Timestamp time.Time    // Unix int64
 	ToAddr    *AddressInfo // short (w/o time and stream)
@@ -50,7 +50,7 @@ type Version struct {
 func VersionDecode(data []byte) *Version {
 	v := &Version{}
 
-	v.Ver = int(order.Uint32(data[:4]))
+	v.protocol = order.Uint32(data[:4])
 	offset := 4
 
 	v.Services = order.Uint64(data[offset : offset+8])
@@ -79,15 +79,22 @@ func VersionDecode(data []byte) *Version {
 }
 
 func (v *Version) Encode() []byte {
-	data := packUint(order, uint32(v.Ver))
+	if v.protocol == 0 {
+		v.protocol = message.ProtocolVersion
+	}
+
+	data := packUint(order, v.protocol)
 	data = append(data, packUint(order, v.Services)...)
 	data = append(data, packUint(order, uint64(v.Timestamp.Unix()))...)
 	data = append(data, v.ToAddr.encodeShort()...)
 	data = append(data, v.FromAddr.encodeShort()...)
 	data = append(data, packUint(order, v.Nonce)...)
 	data = append(data, varStrEncode(v.UserAgent)...)
-	data = append(data, intListEncode(v.Streams)...)
-	return data
+	return append(data, intListEncode(v.Streams)...)
+}
+
+func (v *Version) Protocol() uint32 {
+	return v.protocol
 }
 
 func AddrDecode(data []byte) []*AddressInfo {
@@ -192,8 +199,10 @@ func (g *GetPubKey) Encode() []byte {
 	data = append(data, varIntEncode(g.Stream)...)
 	data = append(data, g.RipeHash...)
 
-	nonce := proofOfWork(data)
-	return append(packUint(order, nonce), data...)
+	if g.powNonce == 0 {
+		g.powNonce = proofOfWork(data)
+	}
+	return append(packUint(order, g.powNonce), data...)
 }
 
 func (g *GetPubKey) PowNonce() uint64 {
@@ -245,8 +254,10 @@ func (k *PubKey) Encode() []byte {
 	data = append(data, k.SignKey...)
 	data = append(data, k.EncryptKey...)
 
-	nonce := proofOfWork(data)
-	return append(packUint(order, nonce), data...)
+	if k.powNonce == 0 {
+		k.powNonce = proofOfWork(data)
+	}
+	return append(packUint(order, k.powNonce), data...)
 }
 
 func (k *PubKey) PowNonce() uint64 {
@@ -283,8 +294,10 @@ func (m *Message) Encode() []byte {
 	data = append(data, varIntEncode(m.Stream)...)
 	data = append(data, m.Data...)
 
-	nonce := proofOfWork(data)
-	return append(packUint(order, nonce), data...)
+	if m.powNonce == 0 {
+		m.powNonce = proofOfWork(data)
+	}
+	return append(packUint(order, m.powNonce), data...)
 }
 
 func (m *Message) PowNonce() uint64 {
@@ -371,8 +384,10 @@ func (b *Broadcast) Encode() []byte {
 	data = append(data, varIntEncode(b.SigLen)...)
 	data = append(data, b.Signature...)
 
-	nonce := proofOfWork(data)
-	return append(packUint(order, nonce), data...)
+	if b.powNonce == 0 {
+		b.powNonce = proofOfWork(data)
+	}
+	return append(packUint(order, b.powNonce), data...)
 }
 
 func (b *Broadcast) PowNonce() uint64 {

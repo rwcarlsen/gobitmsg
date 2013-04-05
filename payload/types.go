@@ -34,9 +34,10 @@ func packUint(order binary.ByteOrder, v interface{}) (data []byte) {
 	return data
 }
 
-// varIntEncode encodes an int as a variable length int.  v must
+// varIntEncode encodes an int as a variable length int.  i must
 // be positive.
-func varIntEncode(v int) (data []byte) {
+func varIntEncode(i int) (data []byte) {
+	v := uint64(i)
 	switch {
 	case v < 0xFD:
 		return []byte{byte(v)}
@@ -158,13 +159,7 @@ func (ai *AddressInfo) encode() []byte {
 }
 
 func (ai *AddressInfo) encodeShort() []byte {
-	data := make([]byte, 26)
-
-	order.PutUint64(data[:8], ai.Services)
-	packIp(data[8:24], ai.Ip)
-	order.PutUint16(data[24:26], uint16(ai.Port))
-
-	return data
+	return ai.encode()[8:]
 }
 
 func packIp(data []byte, ip string) {
