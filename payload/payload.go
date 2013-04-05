@@ -58,20 +58,7 @@ type Version struct {
 	Streams   []int  // var_int_list
 }
 
-func NewVersion(userAgent string, streams []int, from, to *AddressInfo) *Version {
-	return &Version{
-		Ver:       message.ProtocolVersion,
-		Services:  1,
-		Timestamp: time.Now(),
-		ToAddr:    to,
-		FromAddr:  from,
-		Nonce:     RandNonce,
-		UserAgent: userAgent,
-		Streams:   streams,
-	}
-}
-
-func (v *Version) Encode() []byte {
+func (v *Version) encode() []byte {
 	data := packUint(order, uint32(v.Ver))
 	data = append(data, packUint(order, v.Services)...)
 	data = append(data, packUint(order, v.Timestamp.Unix())...)
@@ -83,7 +70,9 @@ func (v *Version) Encode() []byte {
 	return data
 }
 
-func (v *Version) Decode(data []byte) {
+func VersionDecode(data []byte) *Version {
+	v := &Version{}
+
 	v.Ver = int(order.Uint32(data[:4]))
 	offset := 4
 
@@ -108,9 +97,25 @@ func (v *Version) Decode(data []byte) {
 	offset += n
 
 	v.Streams, _ = intListDecode(data[offset:])
+
+	return v
 }
 
-func AddrEncode(addresses []*AddressInfo) []byte {
+func VersionEncode(userAgent string, streams []int, from, to *AddressInfo) []byte {
+	v := &Version{
+		Ver:       message.ProtocolVersion,
+		Services:  1,
+		Timestamp: time.Now(),
+		ToAddr:    to,
+		FromAddr:  from,
+		Nonce:     RandNonce,
+		UserAgent: userAgent,
+		Streams:   streams,
+	}
+	return v.encode()
+}
+
+func AddrEncode(addresses ...*AddressInfo) []byte {
 	data := varIntEncode(len(addresses))
 
 	for _, addr := range addresses {
@@ -185,7 +190,18 @@ type GetPubKey struct {
 	RipeHash    []byte    // len=20
 }
 
-func (g *GetPubKey) Encode() []byte {
+func GetPubKeyEncode(addrVer, stream int, ripe []byte) []byte {
+	g := &GetPubKey{
+		Time:        fuzzTime(),
+		AddrVersion: addrVer,
+		Stream:      stream,
+		RipeHash:    ripe,
+	}
+
+	return g.encode()
+}
+
+func (g *GetPubKey) encode() []byte {
 	data := packUint(order, g.PowNonce)
 	data = append(data, packUint(order, uint32(g.Time.Unix()))...)
 	data = append(data, varIntEncode(g.AddrVersion)...)
@@ -194,7 +210,9 @@ func (g *GetPubKey) Encode() []byte {
 	return data
 }
 
-func (g *GetPubKey) Decode(data []byte) {
+func GetPubKeyDecode(data []byte) *GetPubKey {
+	g := &GetPubKey{}
+
 	g.PowNonce = order.Uint64(data[:8])
 	offset := 8
 
@@ -209,6 +227,8 @@ func (g *GetPubKey) Decode(data []byte) {
 	offset += n
 
 	g.RipeHash = data[offset:]
+
+	return g
 }
 
 type PubKey struct {
@@ -221,7 +241,10 @@ type PubKey struct {
 	EncryptKey  []byte    // len=64
 }
 
-func (k *PubKey) Encode() []byte {
+func PubKeyEncode(addrVer, stream int, behavior uint32, signKey, encryptKey []byte) []byte {
+}
+
+func (k *PubKey) encode() []byte {
 	data := packUint(order, k.PowNonce)
 	data = append(data, packUint(order, uint32(k.Time.Unix()))...)
 	data = append(data, varIntEncode(k.AddrVersion)...)
@@ -260,6 +283,9 @@ type Message struct {
 	Time     time.Time
 	Stream   int
 	Data     []byte
+}
+
+func NewMessage(stream int, data []byte) *Message {
 }
 
 func (m *Message) Encode() []byte {
@@ -301,4 +327,3 @@ type Broadcast struct {
 	SigLen           int // var_int
 	Signature        []byte
 }
-
