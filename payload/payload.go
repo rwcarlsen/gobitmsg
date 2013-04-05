@@ -39,9 +39,9 @@ func proofOfWork(data []byte) (nonce uint64) {
 type Version struct {
 	Ver       int
 	Services  uint64
-	Timestamp time.Time // Unix int64
-	ToAddr    *AddressInfo
-	FromAddr  *AddressInfo
+	Timestamp time.Time    // Unix int64
+	ToAddr    *AddressInfo // short (w/o time and stream)
+	FromAddr  *AddressInfo // short (w/o time and stream)
 	Nonce     uint64
 	UserAgent string // var_str
 	Streams   []int  // var_int_list
