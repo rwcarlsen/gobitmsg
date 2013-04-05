@@ -2,9 +2,7 @@ package payload
 
 import (
 	"crypto/sha512"
-	"errors"
 	"math"
-	"math/rand"
 	"time"
 
 	"github.com/rwcarlsen/gobitmsg/message"
@@ -17,17 +15,8 @@ const (
 
 var order = message.Order
 
-// RandNonce is used to detect connections to self
-var RandNonce = uint64(rand.Uint32())
-
-func fuzzTime() time.Time {
-	t := time.Now()
-	fuzz := time.Duration((rand.Float64()-0.5)*300) * time.Second
-	return t.Add(fuzz)
-}
-
 // proofOfWork returns a pow nonce for data.
-func proofOfWork(data []byte) (nonce uint64, err error) {
+func proofOfWork(data []byte) (nonce uint64) {
 	h := sha512.New()
 	h.Write(data)
 	kernel := h.Sum(nil)
@@ -41,10 +30,10 @@ func proofOfWork(data []byte) (nonce uint64, err error) {
 		sum := h.Sum(nil)
 		trial = order.Uint64(sum[len(sum)-8 : len(sum)])
 		if nonce == math.MaxUint64 {
-			return 0, errors.New("payload: Failed to calculate POW")
+			panic("payload: Failed to calculate POW")
 		}
 	}
-	return nonce, nil
+	return nonce
 }
 
 type Version struct {
@@ -56,18 +45,6 @@ type Version struct {
 	Nonce     uint64
 	UserAgent string // var_str
 	Streams   []int  // var_int_list
-}
-
-func (v *Version) encode() []byte {
-	data := packUint(order, uint32(v.Ver))
-	data = append(data, packUint(order, v.Services)...)
-	data = append(data, packUint(order, v.Timestamp.Unix())...)
-	data = append(data, v.ToAddr.encodeShort()...)
-	data = append(data, v.FromAddr.encodeShort()...)
-	data = append(data, packUint(order, v.Nonce)...)
-	data = append(data, varStrEncode(v.UserAgent)...)
-	data = append(data, intListEncode(v.Streams)...)
-	return data
 }
 
 func VersionDecode(data []byte) *Version {
@@ -101,26 +78,15 @@ func VersionDecode(data []byte) *Version {
 	return v
 }
 
-func VersionEncode(userAgent string, streams []int, from, to *AddressInfo) []byte {
-	v := &Version{
-		Ver:       message.ProtocolVersion,
-		Services:  1,
-		Timestamp: time.Now(),
-		ToAddr:    to,
-		FromAddr:  from,
-		Nonce:     RandNonce,
-		UserAgent: userAgent,
-		Streams:   streams,
-	}
-	return v.encode()
-}
-
-func AddrEncode(addresses ...*AddressInfo) []byte {
-	data := varIntEncode(len(addresses))
-
-	for _, addr := range addresses {
-		data = append(data, addr.encode()...)
-	}
+func (v *Version) Encode() []byte {
+	data := packUint(order, uint32(v.Ver))
+	data = append(data, packUint(order, v.Services)...)
+	data = append(data, packUint(order, v.Timestamp.Unix())...)
+	data = append(data, v.ToAddr.encodeShort()...)
+	data = append(data, v.FromAddr.encodeShort()...)
+	data = append(data, packUint(order, v.Nonce)...)
+	data = append(data, varStrEncode(v.UserAgent)...)
+	data = append(data, intListEncode(v.Streams)...)
 	return data
 }
 
@@ -133,6 +99,26 @@ func AddrDecode(data []byte) []*AddressInfo {
 		offset += n
 	}
 	return addresses
+}
+
+func AddrEncode(addresses ...*AddressInfo) []byte {
+	data := varIntEncode(len(addresses))
+
+	for _, addr := range addresses {
+		data = append(data, addr.encode()...)
+	}
+	return data
+}
+
+func InventoryDecode(data []byte) [][]byte {
+	nObj, offset := varIntDecode(data)
+	objData := make([][]byte, nObj)
+	for i := 0; i < nObj; i++ {
+		start := offset + i*32
+		end := start + 32
+		objData[i] = data[start:end]
+	}
+	return objData
 }
 
 func InventoryEncode(objData [][]byte) []byte {
@@ -152,25 +138,6 @@ func InventoryEncode(objData [][]byte) []byte {
 	return data
 }
 
-func InventoryDecode(data []byte) [][]byte {
-	nObj, offset := varIntDecode(data)
-	objData := make([][]byte, nObj)
-	for i := 0; i < nObj; i++ {
-		start := offset + i*32
-		end := start + 32
-		objData[i] = data[start:end]
-	}
-	return objData
-}
-
-func GetDataEncode(hashes [][]byte) []byte {
-	data := varIntEncode(len(hashes))
-	for _, sum := range hashes {
-		data = append(data, sum...)
-	}
-	return data
-}
-
 func GetDataDecode(data []byte) [][]byte {
 	nHashes, offset := varIntDecode(data)
 	hashes := make([][]byte, nHashes)
@@ -182,38 +149,26 @@ func GetDataDecode(data []byte) [][]byte {
 	return hashes
 }
 
+func GetDataEncode(hashes [][]byte) []byte {
+	data := varIntEncode(len(hashes))
+	for _, sum := range hashes {
+		data = append(data, sum...)
+	}
+	return data
+}
+
 type GetPubKey struct {
-	PowNonce    uint64
+	powNonce    uint64
 	Time        time.Time // uint32
 	AddrVersion int       // var_int
 	Stream      int       // var_int
 	RipeHash    []byte    // len=20
 }
 
-func GetPubKeyEncode(addrVer, stream int, ripe []byte) []byte {
-	g := &GetPubKey{
-		Time:        fuzzTime(),
-		AddrVersion: addrVer,
-		Stream:      stream,
-		RipeHash:    ripe,
-	}
-
-	return g.encode()
-}
-
-func (g *GetPubKey) encode() []byte {
-	data := packUint(order, g.PowNonce)
-	data = append(data, packUint(order, uint32(g.Time.Unix()))...)
-	data = append(data, varIntEncode(g.AddrVersion)...)
-	data = append(data, varIntEncode(g.Stream)...)
-	data = append(data, g.RipeHash...)
-	return data
-}
-
 func GetPubKeyDecode(data []byte) *GetPubKey {
 	g := &GetPubKey{}
 
-	g.PowNonce = order.Uint64(data[:8])
+	g.powNonce = order.Uint64(data[:8])
 	offset := 8
 
 	g.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
@@ -231,8 +186,22 @@ func GetPubKeyDecode(data []byte) *GetPubKey {
 	return g
 }
 
+func (g *GetPubKey) Encode() []byte {
+	data := packUint(order, uint32(g.Time.Unix()))
+	data = append(data, varIntEncode(g.AddrVersion)...)
+	data = append(data, varIntEncode(g.Stream)...)
+	data = append(data, g.RipeHash...)
+
+	nonce := proofOfWork(data)
+	return append(packUint(order, nonce), data...)
+}
+
+func (g *GetPubKey) PowNonce() uint64 {
+	return g.powNonce
+}
+
 type PubKey struct {
-	PowNonce    uint64
+	powNonce    uint64
 	Time        time.Time // uint32
 	AddrVersion int       // var_int
 	Stream      int       // var_int
@@ -241,22 +210,10 @@ type PubKey struct {
 	EncryptKey  []byte    // len=64
 }
 
-func PubKeyEncode(addrVer, stream int, behavior uint32, signKey, encryptKey []byte) []byte {
-}
+func PubKeyDecode(data []byte) *PubKey {
+	k := &PubKey{}
 
-func (k *PubKey) encode() []byte {
-	data := packUint(order, k.PowNonce)
-	data = append(data, packUint(order, uint32(k.Time.Unix()))...)
-	data = append(data, varIntEncode(k.AddrVersion)...)
-	data = append(data, varIntEncode(k.Stream)...)
-	data = append(data, packUint(order, k.Behavior)...)
-	data = append(data, k.SignKey...)
-	data = append(data, k.EncryptKey...)
-	return data
-}
-
-func (k *PubKey) Decode(data []byte) {
-	k.PowNonce = order.Uint64(data[:8])
+	k.powNonce = order.Uint64(data[:8])
 	offset := 8
 
 	k.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
@@ -276,29 +233,37 @@ func (k *PubKey) Decode(data []byte) {
 	offset += 64
 
 	k.EncryptKey = data[offset : offset+64]
+
+	return k
+}
+
+func (k *PubKey) Encode() []byte {
+	data := packUint(order, uint32(k.Time.Unix()))
+	data = append(data, varIntEncode(k.AddrVersion)...)
+	data = append(data, varIntEncode(k.Stream)...)
+	data = append(data, packUint(order, k.Behavior)...)
+	data = append(data, k.SignKey...)
+	data = append(data, k.EncryptKey...)
+
+	nonce := proofOfWork(data)
+	return append(packUint(order, nonce), data...)
+}
+
+func (k *PubKey) PowNonce() uint64 {
+	return k.powNonce
 }
 
 type Message struct {
-	PowNonce uint64
+	powNonce uint64
 	Time     time.Time
 	Stream   int
 	Data     []byte
 }
 
-func NewMessage(stream int, data []byte) *Message {
-}
+func MessageDecode(data []byte) *Message {
+	m := &Message{}
 
-func (m *Message) Encode() []byte {
-	data := packUint(order, m.PowNonce)
-	data = append(data, packUint(order, uint32(m.Time.Unix()))...)
-	data = append(data, varIntEncode(m.Stream)...)
-	data = append(data, m.Data...)
-
-	return data
-}
-
-func (m *Message) Decode(data []byte) {
-	m.PowNonce = order.Uint64(data[:8])
+	m.powNonce = order.Uint64(data[:8])
 	offset := 8
 
 	m.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
@@ -309,6 +274,21 @@ func (m *Message) Decode(data []byte) {
 	offset += n
 
 	m.Data = data[offset:]
+
+	return m
+}
+
+func (m *Message) Encode() []byte {
+	data := packUint(order, uint32(m.Time.Unix()))
+	data = append(data, varIntEncode(m.Stream)...)
+	data = append(data, m.Data...)
+
+	nonce := proofOfWork(data)
+	return append(packUint(order, nonce), data...)
+}
+
+func (m *Message) PowNonce() uint64 {
+	return m.powNonce
 }
 
 type Broadcast struct {
