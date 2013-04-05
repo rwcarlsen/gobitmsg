@@ -39,7 +39,7 @@ func proofOfWork(data []byte) (nonce uint64) {
 type Version struct {
 	Ver       int
 	Services  uint64
-	Timestamp time.Time
+	Timestamp time.Time // Unix int64
 	ToAddr    *AddressInfo
 	FromAddr  *AddressInfo
 	Nonce     uint64
@@ -81,7 +81,7 @@ func VersionDecode(data []byte) *Version {
 func (v *Version) Encode() []byte {
 	data := packUint(order, uint32(v.Ver))
 	data = append(data, packUint(order, v.Services)...)
-	data = append(data, packUint(order, v.Timestamp.Unix())...)
+	data = append(data, packUint(order, uint64(v.Timestamp.Unix()))...)
 	data = append(data, v.ToAddr.encodeShort()...)
 	data = append(data, v.FromAddr.encodeShort()...)
 	data = append(data, packUint(order, v.Nonce)...)
@@ -171,7 +171,7 @@ func GetPubKeyDecode(data []byte) *GetPubKey {
 	g.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	g.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
+	g.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
@@ -216,7 +216,7 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	k.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
+	k.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
@@ -266,7 +266,7 @@ func MessageDecode(data []byte) *Message {
 	m.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	m.Time = time.Unix(int64(order.Uint64(data[offset:offset+4])), 0)
+	m.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
 	offset += 4
 
 	var n int
@@ -292,7 +292,7 @@ func (m *Message) PowNonce() uint64 {
 }
 
 type Broadcast struct {
-	PowNonce         uint64
+	powNonce         uint64
 	Time             time.Time // uint32
 	BroadcastVersion int       // var_int
 	AddrVersion      int       // var_int
@@ -300,10 +300,81 @@ type Broadcast struct {
 	Behavior         uint32
 	SignKey          []byte // len=64
 	EncryptKey       []byte // len=64
-	AddrHash         []byte // len=120
+	AddrHash         []byte // len=20
 	Encoding         int    // var_int
 	MsgLen           int    // var_int
 	Msg              []byte
 	SigLen           int // var_int
 	Signature        []byte
+}
+
+func BroadcastDecode(data []byte) *Broadcast {
+	b := &Broadcast{}
+	var n int
+
+	b.powNonce = order.Uint64(data[:8])
+	offset := 8
+
+	b.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
+	offset += 4
+
+	b.BroadcastVersion, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.AddrVersion, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Stream, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Behavior = order.Uint32(data[offset : offset+4])
+	offset += 4
+
+	b.SignKey = append([]byte{}, data[offset:offset+64]...)
+	offset += 64
+
+	b.EncryptKey = append([]byte{}, data[offset:offset+64]...)
+	offset += 64
+
+	b.AddrHash = append([]byte{}, data[offset:offset+20]...)
+	offset += 20
+
+	b.Encoding, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.MsgLen, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Msg = append([]byte{}, data[offset:offset+b.MsgLen]...)
+	offset += b.MsgLen
+
+	b.SigLen, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Signature = append([]byte{}, data[offset:offset+b.SigLen]...)
+
+	return b
+}
+
+func (b *Broadcast) Encode() []byte {
+	data := packUint(order, uint32(b.Time.Unix()))
+	data = append(data, varIntEncode(b.BroadcastVersion)...)
+	data = append(data, varIntEncode(b.AddrVersion)...)
+	data = append(data, varIntEncode(b.Stream)...)
+	data = append(data, packUint(order, b.Behavior)...)
+	data = append(data, b.SignKey...)
+	data = append(data, b.EncryptKey...)
+	data = append(data, b.AddrHash...)
+	data = append(data, varIntEncode(b.Encoding)...)
+	data = append(data, varIntEncode(b.MsgLen)...)
+	data = append(data, b.Msg...)
+	data = append(data, varIntEncode(b.SigLen)...)
+	data = append(data, b.Signature...)
+
+	nonce := proofOfWork(data)
+	return append(packUint(order, nonce), data...)
+}
+
+func (b *Broadcast) PowNonce() uint64 {
+	return b.powNonce
 }
