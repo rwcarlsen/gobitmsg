@@ -301,3 +301,4 @@ type Broadcast struct {
 	SigLen           int // var_int
 	Signature        []byte
 }
+

@@ -237,65 +237,47 @@ func msgInfoEncode(m *MsgInfo) []byte {
 
 func msgInfoDecode(data []byte) *MsgInfo {
 	m := &MsgInfo{}
+	var offset, n int
 
-	v, offset := varIntDecode(data)
-	m.MsgVersion = v
+	m.MsgVersion, offset = varIntDecode(data)
 
-	v, n := varIntDecode(data[offset:])
-	m.AddrVersion = v
+	m.AddrVersion, n = varIntDecode(data[offset:])
 	offset += n
 
-	v, n = varIntDecode(data[offset:])
-	m.Stream = v
+	m.Stream, n = varIntDecode(data[offset:])
 	offset += n
 
 	m.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	tmp := make([]byte, 0, 64)
-	tmp = append(tmp, data[offset:offset+64]...)
-	m.SignKey = tmp
+	m.SignKey = append([]byte{}, data[offset:offset+64]...)
 	offset += 64
 
-	tmp = make([]byte, 0, 64)
-	tmp = append(tmp, data[offset:offset+64]...)
-	m.EncryptKey = tmp
+	m.EncryptKey = append([]byte{}, data[offset:offset+64]...)
 	offset += 64
 
-	tmp = make([]byte, 0, 20)
-	tmp = append(tmp, data[offset:offset+20]...)
-	m.EncryptKey = tmp
+	m.EncryptKey = append([]byte{}, data[offset:offset+20]...)
 	offset += 20
 
-	v, n = varIntDecode(data[offset:])
-	m.Encoding = v
+	m.Encoding, n = varIntDecode(data[offset:])
 	offset += n
 
-	v, n = varIntDecode(data[offset:])
-	m.MsgLen = v
+	m.MsgLen, n = varIntDecode(data[offset:])
 	offset += n
 
-	tmp = make([]byte, 0, m.MsgLen)
-	tmp = append(tmp, data[offset:offset+m.MsgLen]...)
-	m.Content = tmp
+	m.Content = append([]byte{}, data[offset:offset+m.MsgLen]...)
 	offset += m.MsgLen
 
-	v, n = varIntDecode(data[offset:])
-	m.AckLen = v
+	m.AckLen, n = varIntDecode(data[offset:])
 	offset += n
 
-	tmp = make([]byte, 0, m.AckLen)
-	tmp = append(tmp, data[offset:offset+m.AckLen]...)
-	m.AckData = tmp
+	m.AckData = append([]byte{}, data[offset:offset+m.AckLen]...)
 	offset += m.AckLen
 
-	v, n = varIntDecode(data[offset:])
-	m.SigLen = v
+	m.SigLen, n = varIntDecode(data[offset:])
 	offset += n
 
-	tmp = make([]byte, 0, m.SigLen)
-	tmp = append(tmp, data[offset:offset+m.SigLen]...)
-	m.Signature = tmp
+	m.Signature = append([]byte{}, data[offset:offset+m.SigLen]...)
 
 	return m
 }
