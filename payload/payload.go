@@ -27,8 +27,7 @@ func proofOfWork(data []byte) (nonce uint64) {
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
 		h.Write(h.Sum(nil))
-		sum := h.Sum(nil)
-		trial = order.Uint64(sum[len(sum)-8 : len(sum)])
+		trial = order.Uint64(h.Sum(nil)[:8])
 		if nonce == math.MaxUint64 {
 			panic("payload: Failed to calculate POW")
 		}
