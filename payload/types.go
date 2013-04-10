@@ -200,18 +200,13 @@ type MsgInfo struct {
 	EncryptKey  []byte
 	DestRipe    []byte
 	Encoding    int // VarInt
-	MsgLen      int // VarInt
 	Content     []byte
-	AckLen      int // VarInt
 	AckData     []byte
-	SigLen      int // VarInt
 	Signature   []byte
 }
 
-// msgInfoEncode decodes and returns a MsgInfo struct from data along with the
-// total number of bytes decoded from data.  Bytes after the decoded MsgInfo
-// struct are ignored.
-func msgInfoEncode(m *MsgInfo) []byte {
+// Encode encodes MsgInfo struct into a byte slice.
+func (m *MsgInfo) Encode() []byte {
 	data := varIntEncode(m.MsgVersion)
 	data = append(data, varIntEncode(m.AddrVersion)...)
 	data = append(data, varIntEncode(m.Stream)...)
@@ -220,19 +215,18 @@ func msgInfoEncode(m *MsgInfo) []byte {
 	data = append(data, m.EncryptKey...)
 	data = append(data, m.DestRipe...)
 	data = append(data, varIntEncode(m.Encoding)...)
-	data = append(data, varIntEncode(m.MsgLen)...)
+	data = append(data, varIntEncode(len(m.Content))...)
 	data = append(data, m.Content...)
-	data = append(data, varIntEncode(m.AckLen)...)
+	data = append(data, varIntEncode(len(m.AckData))...)
 	data = append(data, m.AckData...)
-	data = append(data, varIntEncode(m.SigLen)...)
+	data = append(data, varIntEncode(len(m.Signature))...)
 	data = append(data, m.Signature...)
-
 	return data
 }
 
-func msgInfoDecode(data []byte) *MsgInfo {
+func MsgInfoDecode(data []byte) *MsgInfo {
 	m := &MsgInfo{}
-	var offset, n int
+	var offset, n, length int
 
 	m.MsgVersion, offset = varIntDecode(data)
 
@@ -257,22 +251,22 @@ func msgInfoDecode(data []byte) *MsgInfo {
 	m.Encoding, n = varIntDecode(data[offset:])
 	offset += n
 
-	m.MsgLen, n = varIntDecode(data[offset:])
+	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	m.Content = append([]byte{}, data[offset:offset+m.MsgLen]...)
-	offset += m.MsgLen
+	m.Content = append([]byte{}, data[offset:offset+length]...)
+	offset += length
 
-	m.AckLen, n = varIntDecode(data[offset:])
+	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	m.AckData = append([]byte{}, data[offset:offset+m.AckLen]...)
-	offset += m.AckLen
+	m.AckData = append([]byte{}, data[offset:offset+length]...)
+	offset += length
 
-	m.SigLen, n = varIntDecode(data[offset:])
+	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	m.Signature = append([]byte{}, data[offset:offset+m.SigLen]...)
+	m.Signature = append([]byte{}, data[offset:offset+length]...)
 
 	return m
 }

@@ -3,6 +3,7 @@ package payload
 import (
 	"crypto/sha512"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/rwcarlsen/gobitmsg/message"
@@ -11,9 +12,31 @@ import (
 const (
 	PowExtraLen      = 14000
 	PowTrialsPerByte = 320
+	DefaultFuzz      = 300 * time.Second
 )
 
 var order = message.Order
+
+// RandNonce is used to detect connections to self
+var RandNonce = uint64(rand.Uint32())
+
+func FuzzyTime(giveTake time.Duration) time.Time {
+	t := time.Now()
+	fuzz := time.Duration((rand.Float64()-0.5)*float64(giveTake)) * time.Second
+	return t.Add(fuzz)
+}
+
+// Encrypt encrypts and signs data and returns the result.
+// TODO: implement
+func Encrypt(data []byte, encryptKey, signKey []byte) []byte {
+	return data
+}
+
+// Decrypt decrypts data and returns the result.
+// TODO: implement
+func Decrypt(data []byte, encryptKey, signKey []byte) []byte {
+	return data
+}
 
 // proofOfWork returns a pow nonce for data.
 func proofOfWork(data []byte) (nonce uint64) {
@@ -288,6 +311,18 @@ func MessageDecode(data []byte) *Message {
 	return m
 }
 
+// NewMessage is a convenience function for creating a message with
+// encrypted MsgInfo payload data.
+func NewMessage(mi *MsgInfo, stream int) *Message {
+	data := mi.Encode()
+	encrypted := Encrypt(data, mi.EncryptKey, mi.SignKey)
+	return &Message{
+		Time:   FuzzyTime(DefaultFuzz),
+		Stream: stream,
+		Data:   encrypted,
+	}
+}
+
 func (m *Message) Encode() []byte {
 	data := packUint(order, uint32(m.Time.Unix()))
 	data = append(data, varIntEncode(m.Stream)...)
@@ -314,15 +349,13 @@ type Broadcast struct {
 	EncryptKey       []byte // len=64
 	AddrHash         []byte // len=20
 	Encoding         int    // var_int
-	MsgLen           int    // var_int
 	Msg              []byte
-	SigLen           int // var_int
 	Signature        []byte
 }
 
 func BroadcastDecode(data []byte) *Broadcast {
 	b := &Broadcast{}
-	var n int
+	var n, length int
 
 	b.powNonce = order.Uint64(data[:8])
 	offset := 8
@@ -354,16 +387,16 @@ func BroadcastDecode(data []byte) *Broadcast {
 	b.Encoding, n = varIntDecode(data[offset:])
 	offset += n
 
-	b.MsgLen, n = varIntDecode(data[offset:])
+	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	b.Msg = append([]byte{}, data[offset:offset+b.MsgLen]...)
-	offset += b.MsgLen
+	b.Msg = append([]byte{}, data[offset:offset+length]...)
+	offset += length
 
-	b.SigLen, n = varIntDecode(data[offset:])
+	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	b.Signature = append([]byte{}, data[offset:offset+b.SigLen]...)
+	b.Signature = append([]byte{}, data[offset:offset+length]...)
 
 	return b
 }
@@ -378,9 +411,9 @@ func (b *Broadcast) Encode() []byte {
 	data = append(data, b.EncryptKey...)
 	data = append(data, b.AddrHash...)
 	data = append(data, varIntEncode(b.Encoding)...)
-	data = append(data, varIntEncode(b.MsgLen)...)
+	data = append(data, varIntEncode(len(b.Msg))...)
 	data = append(data, b.Msg...)
-	data = append(data, varIntEncode(b.SigLen)...)
+	data = append(data, varIntEncode(len(b.Signature))...)
 	data = append(data, b.Signature...)
 
 	if b.powNonce == 0 {
