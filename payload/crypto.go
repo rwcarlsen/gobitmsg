@@ -36,9 +36,9 @@ func proofOfWork(data []byte) (nonce uint64) {
 	return nonce
 }
 
-// Encrypt encrypts and signs data and returns the result.
+// Encrypt encrypts data and returns the result.
 // TODO: implement
-func Encrypt(data []byte, encryptKey, signKey []byte) []byte {
+func Encrypt(data []byte, encryptKey []byte) []byte {
 	return data
 }
 

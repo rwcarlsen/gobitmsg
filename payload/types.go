@@ -202,7 +202,7 @@ type MsgInfo struct {
 	Encoding    int // VarInt
 	Content     []byte
 	AckData     []byte
-	Signature   []byte
+	signature   []byte
 }
 
 // Encode encodes MsgInfo struct into a byte slice.
@@ -219,9 +219,23 @@ func (m *MsgInfo) Encode() []byte {
 	data = append(data, m.Content...)
 	data = append(data, varIntEncode(len(m.AckData))...)
 	data = append(data, m.AckData...)
-	data = append(data, varIntEncode(len(m.Signature))...)
-	data = append(data, m.Signature...)
+	data = append(data, m.AckData...)
+
+	m.sign(data)
+	data = append(data, varIntEncode(len(m.signature))...)
+	data = append(data, m.signature...)
+
 	return data
+}
+
+func (m *MsgInfo) Signature() []byte {
+	return m.signature
+}
+
+// TODO: implement
+func (m *MsgInfo) sign(data []byte) {
+	m.signature = []byte{}
+	panic("not implemented")
 }
 
 func MsgInfoDecode(data []byte) *MsgInfo {
@@ -266,7 +280,7 @@ func MsgInfoDecode(data []byte) *MsgInfo {
 	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	m.Signature = append([]byte{}, data[offset:offset+length]...)
+	m.signature = append([]byte{}, data[offset:offset+length]...)
 
 	return m
 }

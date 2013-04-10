@@ -246,6 +246,7 @@ func (k *PubKey) PowNonce() uint64 {
 type Message struct {
 	powNonce uint64
 	Time     time.Time
+	// Stream is the destination/recipient's stream #
 	Stream   int
 	Data     []byte
 }
@@ -272,7 +273,7 @@ func MessageDecode(data []byte) *Message {
 // encrypted MsgInfo payload data.
 func NewMessage(mi *MsgInfo, stream int) *Message {
 	data := mi.Encode()
-	encrypted := Encrypt(data, mi.EncryptKey, mi.SignKey)
+	encrypted := Encrypt(data, mi.EncryptKey)
 	return &Message{
 		Time:   FuzzyTime(DefaultFuzz),
 		Stream: stream,
@@ -307,7 +308,7 @@ type Broadcast struct {
 	AddrHash         []byte // len=20
 	Encoding         int    // var_int
 	Msg              []byte
-	Signature        []byte
+	signature        []byte
 }
 
 func BroadcastDecode(data []byte) *Broadcast {
@@ -353,7 +354,7 @@ func BroadcastDecode(data []byte) *Broadcast {
 	length, n = varIntDecode(data[offset:])
 	offset += n
 
-	b.Signature = append([]byte{}, data[offset:offset+length]...)
+	b.signature = append([]byte{}, data[offset:offset+length]...)
 
 	return b
 }
@@ -370,8 +371,10 @@ func (b *Broadcast) Encode() []byte {
 	data = append(data, varIntEncode(b.Encoding)...)
 	data = append(data, varIntEncode(len(b.Msg))...)
 	data = append(data, b.Msg...)
-	data = append(data, varIntEncode(len(b.Signature))...)
-	data = append(data, b.Signature...)
+
+	b.sign(data)
+	data = append(data, varIntEncode(len(b.signature))...)
+	data = append(data, b.signature...)
 
 	if b.powNonce == 0 {
 		b.powNonce = proofOfWork(data)
@@ -382,3 +385,14 @@ func (b *Broadcast) Encode() []byte {
 func (b *Broadcast) PowNonce() uint64 {
 	return b.powNonce
 }
+
+func (b *Broadcast) Signature() []byte {
+	return b.signature
+}
+
+// TODO: implement
+func (b *Broadcast) sign(data []byte) {
+	b.signature = []byte{}
+	panic("not implemented")
+}
+

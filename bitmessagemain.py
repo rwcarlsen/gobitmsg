@@ -2270,6 +2270,7 @@ class singleWorker(QThread):
                 print 'In the singleWorker thread, the sendBroadcast function doesn\'t understand the address version'
                 printLock.release()
 
+# ENCRYPT SEND MESSAGE MSGINFO
     def sendMsg(self,toRipe):
         sqlLock.acquire()
         t = ('doingpow','findingpubkey',toRipe)
