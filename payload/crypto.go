@@ -2,10 +2,21 @@ package payload
 
 import (
 	"crypto/sha512"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"math"
 	"math/rand"
+	"math/big"
 	"time"
+	"encoding/ans1"
+
+	"github.com/rwcarlsen/koblitz/kelliptic"
 )
+
+var curve
+
+func getCurve() *elliptic.CurveParams {
+}
 
 // RandNonce is used to detect connections to self
 var RandNonce = uint64(rand.Uint32())
@@ -36,14 +47,55 @@ func proofOfWork(data []byte) (nonce uint64) {
 	return nonce
 }
 
-// Encrypt encrypts data and returns the result.
-// TODO: implement
-func Encrypt(data []byte, encryptKey []byte) []byte {
-	return data
+type Key struct {
+	 key *ecdsa.PrivateKey
 }
 
-// Decrypt decrypts data and returns the result.
-// TODO: implement
-func Decrypt(data []byte, encryptKey, signKey []byte) []byte {
-	return data
+func NewKey() (*Key, error) {
+	curve := kelliptic.S256()
+	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return &Key{key: priv}
 }
+
+// Decode decodes a public key.
+func DecodeKey(data []byte) (k *Key, n int) {
+	// only 64 bytes long
+	// PUBLIC KEY ONLY !!!
+	panic("not implemented")
+}
+
+// Encode encodes the public key.
+func (k *Key) Encode() []byte {
+	// only 64 bytes long
+	// PUBLIC KEY ONLY !!!
+	panic("not implemented")
+}
+
+func (k *Key) Verify(data, sig []byte) bool {
+	panic("not implemented")
+}
+
+// TODO: make sure hash and signature encoding are correct
+func (k *Key) Sign(data []byte) (signature []byte, err error) {
+	h := sha512.New()
+	h.Write(data)
+	hash := h.Sum(nil)
+
+	r, s, err := ecdsa.Sign(rand.Reader, k.key, hash)
+	if err != nil {
+		return nil, err
+	}
+	return ans1.Marshal(struct{R, S *big.Int}{r, s})
+}
+
+func (k *Key) Encrypt(data []byte) []byte {
+	panic("not implemented")
+}
+
+func (k *Key) Decrypt(data []byte) []byte {
+	panic("not implemented")
+}
+

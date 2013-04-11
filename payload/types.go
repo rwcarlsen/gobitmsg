@@ -196,8 +196,8 @@ type MsgInfo struct {
 	AddrVersion int // VarInt
 	Stream      int // VarInt
 	Behavior    uint32
-	SignKey     []byte
-	EncryptKey  []byte
+	SignKey     *Key
+	EncryptKey  *Key
 	DestRipe    []byte
 	Encoding    int // VarInt
 	Content     []byte
@@ -211,17 +211,16 @@ func (m *MsgInfo) Encode() []byte {
 	data = append(data, varIntEncode(m.AddrVersion)...)
 	data = append(data, varIntEncode(m.Stream)...)
 	data = append(data, packUint(order, m.Behavior)...)
-	data = append(data, m.SignKey...)
-	data = append(data, m.EncryptKey...)
+	data = append(data, m.SignKey.Encode()...)
+	data = append(data, m.EncryptKey.Encode()...)
 	data = append(data, m.DestRipe...)
 	data = append(data, varIntEncode(m.Encoding)...)
 	data = append(data, varIntEncode(len(m.Content))...)
 	data = append(data, m.Content...)
 	data = append(data, varIntEncode(len(m.AckData))...)
 	data = append(data, m.AckData...)
-	data = append(data, m.AckData...)
 
-	m.sign(data)
+	m.signature = m.SignKey.Sign(data)
 	data = append(data, varIntEncode(len(m.signature))...)
 	data = append(data, m.signature...)
 
@@ -230,12 +229,6 @@ func (m *MsgInfo) Encode() []byte {
 
 func (m *MsgInfo) Signature() []byte {
 	return m.signature
-}
-
-// TODO: implement
-func (m *MsgInfo) sign(data []byte) {
-	m.signature = []byte{}
-	panic("not implemented")
 }
 
 func MsgInfoDecode(data []byte) *MsgInfo {
@@ -253,13 +246,13 @@ func MsgInfoDecode(data []byte) *MsgInfo {
 	m.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	m.SignKey = append([]byte{}, data[offset:offset+64]...)
-	offset += 64
+	m.SignKey, n = DecodeKey(data[offset:])
+	offset += n
 
-	m.EncryptKey = append([]byte{}, data[offset:offset+64]...)
-	offset += 64
+	m.EncryptKey, n = DecodeKey(data[offset:])
+	offset += n
 
-	m.EncryptKey = append([]byte{}, data[offset:offset+20]...)
+	m.DestRipe = append([]byte{}, data[offset:offset+20]...)
 	offset += 20
 
 	m.Encoding, n = varIntDecode(data[offset:])

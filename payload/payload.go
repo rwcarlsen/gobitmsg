@@ -194,8 +194,8 @@ type PubKey struct {
 	AddrVersion int       // var_int
 	Stream      int       // var_int
 	Behavior    uint32    // bitfield
-	SignKey     []byte    // len=64
-	EncryptKey  []byte    // len=64
+	SignKey     *Key    // len=64
+	EncryptKey  *Key    // len=64
 }
 
 func PubKeyDecode(data []byte) *PubKey {
@@ -217,10 +217,10 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	k.SignKey = data[offset : offset+64]
-	offset += 64
+	k.SignKey, n = DecodeKey(data[offset:])
+	offset += n
 
-	k.EncryptKey = data[offset : offset+64]
+	k.EncryptKey, _ = DecodeKey(data[offset:])
 
 	return k
 }
@@ -230,8 +230,8 @@ func (k *PubKey) Encode() []byte {
 	data = append(data, varIntEncode(k.AddrVersion)...)
 	data = append(data, varIntEncode(k.Stream)...)
 	data = append(data, packUint(order, k.Behavior)...)
-	data = append(data, k.SignKey...)
-	data = append(data, k.EncryptKey...)
+	data = append(data, k.SignKey.Encode()...)
+	data = append(data, k.EncryptKey.Encode()...)
 
 	if k.powNonce == 0 {
 		k.powNonce = proofOfWork(data)
@@ -273,7 +273,7 @@ func MessageDecode(data []byte) *Message {
 // encrypted MsgInfo payload data.
 func NewMessage(mi *MsgInfo, stream int) *Message {
 	data := mi.Encode()
-	encrypted := Encrypt(data, mi.EncryptKey)
+	encrypted := mi.EncryptKey.Encrypt(data)
 	return &Message{
 		Time:   FuzzyTime(DefaultFuzz),
 		Stream: stream,
@@ -303,8 +303,8 @@ type Broadcast struct {
 	AddrVersion      int       // var_int
 	Stream           int       // var_int
 	Behavior         uint32
-	SignKey          []byte // len=64
-	EncryptKey       []byte // len=64
+	SignKey          *Key // len=64
+	EncryptKey       *Key // len=64
 	AddrHash         []byte // len=20
 	Encoding         int    // var_int
 	Msg              []byte
@@ -333,11 +333,11 @@ func BroadcastDecode(data []byte) *Broadcast {
 	b.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	b.SignKey = append([]byte{}, data[offset:offset+64]...)
-	offset += 64
+	b.SignKey, n = DecodeKey(data[offset:])
+	offset += n
 
-	b.EncryptKey = append([]byte{}, data[offset:offset+64]...)
-	offset += 64
+	b.EncryptKey, n = DecodeKey(data[offset:])
+	offset += n
 
 	b.AddrHash = append([]byte{}, data[offset:offset+20]...)
 	offset += 20
@@ -365,14 +365,14 @@ func (b *Broadcast) Encode() []byte {
 	data = append(data, varIntEncode(b.AddrVersion)...)
 	data = append(data, varIntEncode(b.Stream)...)
 	data = append(data, packUint(order, b.Behavior)...)
-	data = append(data, b.SignKey...)
-	data = append(data, b.EncryptKey...)
+	data = append(data, b.SignKey.Encode()...)
+	data = append(data, b.EncryptKey.Encode()...)
 	data = append(data, b.AddrHash...)
 	data = append(data, varIntEncode(b.Encoding)...)
 	data = append(data, varIntEncode(len(b.Msg))...)
 	data = append(data, b.Msg...)
 
-	b.sign(data)
+	b.signature = b.SignKey.Sign(data)
 	data = append(data, varIntEncode(len(b.signature))...)
 	data = append(data, b.signature...)
 
@@ -388,11 +388,5 @@ func (b *Broadcast) PowNonce() uint64 {
 
 func (b *Broadcast) Signature() []byte {
 	return b.signature
-}
-
-// TODO: implement
-func (b *Broadcast) sign(data []byte) {
-	b.signature = []byte{}
-	panic("not implemented")
 }
 
