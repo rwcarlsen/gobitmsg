@@ -145,10 +145,10 @@ func GetDataEncode(hashes [][]byte) []byte {
 
 type GetPubKey struct {
 	powNonce    uint64
-	Time        time.Time // uint32
-	AddrVersion int       // var_int
-	Stream      int       // var_int
-	RipeHash    []byte    // len=20
+	Time        time.Time
+	AddrVersion int
+	Stream      int
+	RipeHash    []byte
 }
 
 func GetPubKeyDecode(data []byte) *GetPubKey {
@@ -157,8 +157,8 @@ func GetPubKeyDecode(data []byte) *GetPubKey {
 	g.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	g.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
-	offset += 4
+	g.Time = time.Unix(int64(order.Uint64(data[offset:offset+8])), 0)
+	offset += 8
 
 	var n int
 	g.AddrVersion, n = varIntDecode(data[offset:])
@@ -173,13 +173,13 @@ func GetPubKeyDecode(data []byte) *GetPubKey {
 }
 
 func (g *GetPubKey) Encode() []byte {
-	data := packUint(order, uint32(g.Time.Unix()))
+	data := packUint(order, g.Time.Unix())
 	data = append(data, varIntEncode(g.AddrVersion)...)
 	data = append(data, varIntEncode(g.Stream)...)
 	data = append(data, g.RipeHash...)
 
 	if g.powNonce == 0 {
-		g.powNonce = proofOfWork(data)
+		g.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, g.powNonce), data...)
 }
@@ -189,13 +189,17 @@ func (g *GetPubKey) PowNonce() uint64 {
 }
 
 type PubKey struct {
-	powNonce    uint64
-	Time        time.Time // uint32
-	AddrVersion int       // var_int
-	Stream      int       // var_int
-	Behavior    uint32    // bitfield
-	SignKey     *Key    // len=64
-	EncryptKey  *Key    // len=64
+	powNonce      uint64
+	Time          time.Time
+	AddrVersion   int
+	Stream        int
+	Behavior      uint32
+	SignKey       *Key
+	EncryptKey    *Key
+	TrialsPerByte int
+	ExtraBytes    int
+	SigLen        int
+	signature     []byte // ECDSA from beginning through ExtraBytes
 }
 
 func PubKeyDecode(data []byte) *PubKey {
@@ -204,8 +208,8 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	k.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
-	offset += 4
+	k.Time = time.Unix(int64(order.Uint64(data[offset:offset+8])), 0)
+	offset += 8
 
 	var n int
 	k.AddrVersion, n = varIntDecode(data[offset:])
@@ -220,23 +224,50 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.SignKey, n = DecodeKey(data[offset:])
 	offset += n
 
-	k.EncryptKey, _ = DecodeKey(data[offset:])
+	k.EncryptKey, n = DecodeKey(data[offset:])
+	offset += n
+
+	k.TrialsPerByte, n = varIntDecode(data[offset:])
+	offset += n
+
+	k.ExtraBytes, n = varIntDecode(data[offset:])
+	offset += n
+
+	k.SigLen, n = varIntDecode(data[offset:])
+	offset += n
+
+	k.signature = append([]byte{}, data[offset:]...)
 
 	return k
 }
 
 func (k *PubKey) Encode() []byte {
-	data := packUint(order, uint32(k.Time.Unix()))
+	data := packUint(order, k.Time.Unix())
 	data = append(data, varIntEncode(k.AddrVersion)...)
 	data = append(data, varIntEncode(k.Stream)...)
 	data = append(data, packUint(order, k.Behavior)...)
 	data = append(data, k.SignKey.Encode()...)
 	data = append(data, k.EncryptKey.Encode()...)
+	data = append(data, varIntEncode(k.TrialsPerByte)...)
+	data = append(data, varIntEncode(k.ExtraBytes)...)
 
 	if k.powNonce == 0 {
-		k.powNonce = proofOfWork(data)
+		k.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
 	}
-	return append(packUint(order, k.powNonce), data...)
+	data = append(packUint(order, k.powNonce), data...)
+
+	var err error
+	if k.signature, err = k.SignKey.Sign(data); err != nil {
+		panic("signature failed")
+	}
+	data = append(data, varIntEncode(len(k.signature))...)
+	data = append(data, k.signature...)
+
+	return data
+}
+
+func (k *PubKey) Signature() []byte {
+	return k.signature
 }
 
 func (k *PubKey) PowNonce() uint64 {
@@ -247,8 +278,8 @@ type Message struct {
 	powNonce uint64
 	Time     time.Time
 	// Stream is the destination/recipient's stream #
-	Stream   int
-	Data     []byte
+	Stream int
+	Data   []byte
 }
 
 func MessageDecode(data []byte) *Message {
@@ -257,8 +288,8 @@ func MessageDecode(data []byte) *Message {
 	m.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	m.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
-	offset += 4
+	m.Time = time.Unix(int64(order.Uint64(data[offset:offset+8])), 0)
+	offset += 8
 
 	var n int
 	m.Stream, n = varIntDecode(data[offset:])
@@ -282,12 +313,12 @@ func NewMessage(mi *MsgInfo, stream int) *Message {
 }
 
 func (m *Message) Encode() []byte {
-	data := packUint(order, uint32(m.Time.Unix()))
+	data := packUint(order, m.Time.Unix())
 	data = append(data, varIntEncode(m.Stream)...)
 	data = append(data, m.Data...)
 
 	if m.powNonce == 0 {
-		m.powNonce = proofOfWork(data)
+		m.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, m.powNonce), data...)
 }
@@ -297,87 +328,42 @@ func (m *Message) PowNonce() uint64 {
 }
 
 type Broadcast struct {
-	powNonce         uint64
-	Time             time.Time // uint32
-	BroadcastVersion int       // var_int
-	AddrVersion      int       // var_int
-	Stream           int       // var_int
-	Behavior         uint32
-	SignKey          *Key // len=64
-	EncryptKey       *Key // len=64
-	AddrHash         []byte // len=20
-	Encoding         int    // var_int
-	Msg              []byte
-	signature        []byte
+	powNonce uint64
+	Time     time.Time
+	Version  int
+	Stream   int
+	Data     []byte
 }
 
 func BroadcastDecode(data []byte) *Broadcast {
 	b := &Broadcast{}
-	var n, length int
+	var n int
 
 	b.powNonce = order.Uint64(data[:8])
 	offset := 8
 
-	b.Time = time.Unix(int64(order.Uint32(data[offset:offset+4])), 0)
-	offset += 4
+	b.Time = time.Unix(int64(order.Uint64(data[offset:offset+8])), 0)
+	offset += 8
 
-	b.BroadcastVersion, n = varIntDecode(data[offset:])
-	offset += n
-
-	b.AddrVersion, n = varIntDecode(data[offset:])
+	b.Version, n = varIntDecode(data[offset:])
 	offset += n
 
 	b.Stream, n = varIntDecode(data[offset:])
 	offset += n
 
-	b.Behavior = order.Uint32(data[offset : offset+4])
-	offset += 4
-
-	b.SignKey, n = DecodeKey(data[offset:])
-	offset += n
-
-	b.EncryptKey, n = DecodeKey(data[offset:])
-	offset += n
-
-	b.AddrHash = append([]byte{}, data[offset:offset+20]...)
-	offset += 20
-
-	b.Encoding, n = varIntDecode(data[offset:])
-	offset += n
-
-	length, n = varIntDecode(data[offset:])
-	offset += n
-
-	b.Msg = append([]byte{}, data[offset:offset+length]...)
-	offset += length
-
-	length, n = varIntDecode(data[offset:])
-	offset += n
-
-	b.signature = append([]byte{}, data[offset:offset+length]...)
+	b.Data = data[offset:]
 
 	return b
 }
 
 func (b *Broadcast) Encode() []byte {
-	data := packUint(order, uint32(b.Time.Unix()))
-	data = append(data, varIntEncode(b.BroadcastVersion)...)
-	data = append(data, varIntEncode(b.AddrVersion)...)
+	data := packUint(order, b.Time.Unix())
+	data = append(data, varIntEncode(b.Version)...)
 	data = append(data, varIntEncode(b.Stream)...)
-	data = append(data, packUint(order, b.Behavior)...)
-	data = append(data, b.SignKey.Encode()...)
-	data = append(data, b.EncryptKey.Encode()...)
-	data = append(data, b.AddrHash...)
-	data = append(data, varIntEncode(b.Encoding)...)
-	data = append(data, varIntEncode(len(b.Msg))...)
-	data = append(data, b.Msg...)
-
-	b.signature = b.SignKey.Sign(data)
-	data = append(data, varIntEncode(len(b.signature))...)
-	data = append(data, b.signature...)
+	data = append(data, b.Data...)
 
 	if b.powNonce == 0 {
-		b.powNonce = proofOfWork(data)
+		b.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, b.powNonce), data...)
 }
@@ -385,8 +371,3 @@ func (b *Broadcast) Encode() []byte {
 func (b *Broadcast) PowNonce() uint64 {
 	return b.powNonce
 }
-
-func (b *Broadcast) Signature() []byte {
-	return b.signature
-}
-

@@ -4,37 +4,37 @@ import (
 	"crypto/sha512"
 	"crypto/ecdsa"
 	"crypto/rand"
+	mrand "math/rand"
+	"crypto/elliptic"
 	"math"
-	"math/rand"
 	"math/big"
 	"time"
-	"encoding/ans1"
+	"encoding/asn1"
 
 	"github.com/rwcarlsen/koblitz/kelliptic"
 )
 
-var curve
-
 func getCurve() *elliptic.CurveParams {
+	panic("not implemented")
 }
 
 // RandNonce is used to detect connections to self
-var RandNonce = uint64(rand.Uint32())
+var RandNonce = uint64(mrand.Uint32())
 
 func FuzzyTime(giveTake time.Duration) time.Time {
 	t := time.Now()
-	fuzz := time.Duration((rand.Float64()-0.5)*float64(giveTake)) * time.Second
+	fuzz := time.Duration((mrand.Float64()-0.5)*float64(giveTake)) * time.Second
 	return t.Add(fuzz)
 }
 
 // proofOfWork returns a pow nonce for data.
-func proofOfWork(data []byte) (nonce uint64) {
+func proofOfWork(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
 	h := sha512.New()
 	h.Write(data)
 	kernel := h.Sum(nil)
 
 	trial := uint64(math.MaxUint64)
-	target := math.MaxUint64 / ((uint64(len(data)) + PowExtraLen + 8) * PowTrialsPerByte)
+	target := math.MaxUint64 / uint64((len(data) + extraLen + 8) * trialsPerByte)
 	for nonce = 0; trial > target; nonce++ {
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
@@ -57,7 +57,7 @@ func NewKey() (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Key{key: priv}
+	return &Key{key: priv}, nil
 }
 
 // Decode decodes a public key.
@@ -88,7 +88,7 @@ func (k *Key) Sign(data []byte) (signature []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return ans1.Marshal(struct{R, S *big.Int}{r, s})
+	return asn1.Marshal(struct{R, S *big.Int}{r, s})
 }
 
 func (k *Key) Encrypt(data []byte) []byte {

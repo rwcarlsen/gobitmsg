@@ -127,7 +127,7 @@ type AddressInfo struct {
 // Bytes after the decoded struct are ignored.
 func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 	return &AddressInfo{
-		Time:     time.Unix(int64(order.Uint32(data[:4])), 0),
+		Time:     time.Unix(int64(order.Uint64(data[:8])), 0),
 		Stream:   int(order.Uint32(data[4:8])),
 		Services: order.Uint64(data[8:16]),
 		Ip:       unpackIp(data[16:32]),
@@ -147,9 +147,9 @@ func addressInfoDecodeShort(data []byte) (v *AddressInfo, n int) {
 }
 
 func (ai *AddressInfo) encode() []byte {
-	data := make([]byte, 34)
+	data := make([]byte, 38)
 
-	order.PutUint32(data[:4], uint32(ai.Time.Unix()))
+	order.PutUint64(data[:8], uint64(ai.Time.Unix()))
 	order.PutUint32(data[4:8], uint32(ai.Stream))
 	order.PutUint64(data[8:16], ai.Services)
 	packIp(data[16:32], ai.Ip)
@@ -159,7 +159,7 @@ func (ai *AddressInfo) encode() []byte {
 }
 
 func (ai *AddressInfo) encodeShort() []byte {
-	return ai.encode()[8:]
+	return ai.encode()[12:]
 }
 
 func packIp(data []byte, ip string) {
@@ -220,7 +220,10 @@ func (m *MsgInfo) Encode() []byte {
 	data = append(data, varIntEncode(len(m.AckData))...)
 	data = append(data, m.AckData...)
 
-	m.signature = m.SignKey.Sign(data)
+	var err error
+	if m.signature, err = m.SignKey.Sign(data); err != nil {
+		panic("signature failed")
+	}
 	data = append(data, varIntEncode(len(m.signature))...)
 	data = append(data, m.signature...)
 
@@ -276,4 +279,90 @@ func MsgInfoDecode(data []byte) *MsgInfo {
 	m.signature = append([]byte{}, data[offset:offset+length]...)
 
 	return m
+}
+
+type BroadcastInfo struct {
+	BroadcastVersion int
+	AddrVersion      int
+	Stream           int
+	Behavior         uint32
+	SignKey          *Key
+	EncryptKey       *Key
+	TrialsPerByte int
+	ExtraBytes int
+	Encoding         int
+	Msg              []byte
+	signature        []byte
+}
+
+func BroadcastInfoDecode(data []byte) *BroadcastInfo {
+	b := &BroadcastInfo{}
+	var length, offset, n int
+
+	b.BroadcastVersion, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.AddrVersion, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Stream, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Behavior = order.Uint32(data[offset:offset+4])
+	offset += 4
+
+	b.SignKey, n = DecodeKey(data[offset:])
+	offset += n
+
+	b.EncryptKey, n = DecodeKey(data[offset:])
+	offset += n
+
+	b.TrialsPerByte, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.ExtraBytes, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Encoding, n = varIntDecode(data[offset:])
+	offset += n
+
+	length, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.Msg = append([]byte{}, data[offset:offset+length]...)
+	offset += length
+
+	length, n = varIntDecode(data[offset:])
+	offset += n
+
+	b.signature = append([]byte{}, data[offset:offset+length]...)
+
+	return b
+}
+
+func (b *BroadcastInfo) Encode() []byte {
+	data := varIntEncode(b.BroadcastVersion)
+	data = append(data, varIntEncode(b.AddrVersion)...)
+	data = append(data, varIntEncode(b.Stream)...)
+	data = append(data, packUint(order, b.Behavior)...)
+	data = append(data, b.SignKey.Encode()...)
+	data = append(data, b.EncryptKey.Encode()...)
+	data = append(data, varIntEncode(b.TrialsPerByte)...)
+	data = append(data, varIntEncode(b.ExtraBytes)...)
+	data = append(data, varIntEncode(b.Encoding)...)
+	data = append(data, varIntEncode(len(b.Msg))...)
+	data = append(data, b.Msg...)
+
+	var err error
+	if b.signature, err = b.SignKey.Sign(data); err != nil {
+		panic("signature failed")
+	}
+	data = append(data, varIntEncode(len(b.signature))...)
+	data = append(data, b.signature...)
+
+	return data
+}
+
+func (b *BroadcastInfo) Signature() []byte {
+	return b.signature
 }
