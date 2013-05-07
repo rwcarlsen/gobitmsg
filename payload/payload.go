@@ -221,10 +221,10 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	k.SignKey, n = DecodeKey(data[offset:])
+	k.SignKey, n = DecodePubKey(data[offset:])
 	offset += n
 
-	k.EncryptKey, n = DecodeKey(data[offset:])
+	k.EncryptKey, n = DecodePubKey(data[offset:])
 	offset += n
 
 	k.TrialsPerByte, n = varIntDecode(data[offset:])
@@ -246,8 +246,8 @@ func (k *PubKey) Encode() []byte {
 	data = append(data, varIntEncode(k.AddrVersion)...)
 	data = append(data, varIntEncode(k.Stream)...)
 	data = append(data, packUint(order, k.Behavior)...)
-	data = append(data, k.SignKey.Encode()...)
-	data = append(data, k.EncryptKey.Encode()...)
+	data = append(data, k.SignKey.EncodePub()...)
+	data = append(data, k.EncryptKey.EncodePub()...)
 	data = append(data, varIntEncode(k.TrialsPerByte)...)
 	data = append(data, varIntEncode(k.ExtraBytes)...)
 

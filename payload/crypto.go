@@ -1,21 +1,22 @@
 package payload
 
 import (
-	"crypto/sha512"
 	"crypto/ecdsa"
-	"crypto/rand"
-	mrand "math/rand"
 	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha512"
+	"encoding/asn1"
 	"math"
 	"math/big"
+	mrand "math/rand"
 	"time"
-	"encoding/asn1"
 
 	"github.com/rwcarlsen/koblitz/kelliptic"
 )
 
-func getCurve() *elliptic.CurveParams {
-	panic("not implemented")
+func getCurve() elliptic.Curve {
+	return kelliptic.S256()
 }
 
 // RandNonce is used to detect connections to self
@@ -34,7 +35,7 @@ func proofOfWork(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
 	kernel := h.Sum(nil)
 
 	trial := uint64(math.MaxUint64)
-	target := math.MaxUint64 / uint64((len(data) + extraLen + 8) * trialsPerByte)
+	target := math.MaxUint64 / uint64((len(data)+extraLen+8)*trialsPerByte)
 	for nonce = 0; trial > target; nonce++ {
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
@@ -48,47 +49,56 @@ func proofOfWork(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
 }
 
 type Key struct {
-	 key *ecdsa.PrivateKey
+	*ecdsa.PrivateKey
 }
 
 func NewKey() (*Key, error) {
-	curve := kelliptic.S256()
-	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
+	priv, err := ecdsa.GenerateKey(getCurve(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-	return &Key{key: priv}, nil
+	return &Key{priv}, nil
 }
 
-// Decode decodes a public key.
-func DecodeKey(data []byte) (k *Key, n int) {
-	// only 64 bytes long
+// Decode decodes a public key from data into k.
+func DecodePubKey(data []byte) (k *Key, n int) {
 	// PUBLIC KEY ONLY !!!
-	panic("not implemented")
+	x, y := elliptic.Unmarshal(getCurve(), data[:64])
+	pub := ecdsa.PublicKey{getCurve(), x, y}
+	return &Key{&ecdsa.PrivateKey{PublicKey: pub}}, 64
 }
 
-// Encode encodes the public key.
-func (k *Key) Encode() []byte {
-	// only 64 bytes long
-	// PUBLIC KEY ONLY !!!
-	panic("not implemented")
+// Encode encodes the public key portion of this key.
+func (k *Key) EncodePub() []byte {
+	return elliptic.Marshal(k.Curve, k.X, k.Y)
 }
 
 func (k *Key) Verify(data, sig []byte) bool {
-	panic("not implemented")
+	// I think openssl (and pybitmessage) use sha1 for the hash
+	h := sha1.New()
+	h.Write(data)
+	hash := h.Sum(nil)
+
+	vals := struct{R, S *big.Int}{}
+	if _, err := asn1.Unmarshal(sig, &vals); err != nil {
+		return false
+	}
+
+	return ecdsa.Verify(&k.PublicKey, hash, vals.R, vals.S)
 }
 
 // TODO: make sure hash and signature encoding are correct
 func (k *Key) Sign(data []byte) (signature []byte, err error) {
-	h := sha512.New()
+	// I think openssl (and pybitmessage) use sha1 for the hash
+	h := sha1.New()
 	h.Write(data)
 	hash := h.Sum(nil)
 
-	r, s, err := ecdsa.Sign(rand.Reader, k.key, hash)
+	r, s, err := ecdsa.Sign(rand.Reader, k.PrivateKey, hash)
 	if err != nil {
 		return nil, err
 	}
-	return asn1.Marshal(struct{R, S *big.Int}{r, s})
+	return asn1.Marshal(struct{ R, S *big.Int }{r, s})
 }
 
 func (k *Key) Encrypt(data []byte) []byte {
@@ -98,4 +108,3 @@ func (k *Key) Encrypt(data []byte) []byte {
 func (k *Key) Decrypt(data []byte) []byte {
 	panic("not implemented")
 }
-

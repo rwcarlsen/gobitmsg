@@ -211,8 +211,8 @@ func (m *MsgInfo) Encode() []byte {
 	data = append(data, varIntEncode(m.AddrVersion)...)
 	data = append(data, varIntEncode(m.Stream)...)
 	data = append(data, packUint(order, m.Behavior)...)
-	data = append(data, m.SignKey.Encode()...)
-	data = append(data, m.EncryptKey.Encode()...)
+	data = append(data, m.SignKey.EncodePub()...)
+	data = append(data, m.EncryptKey.EncodePub()...)
 	data = append(data, m.DestRipe...)
 	data = append(data, varIntEncode(m.Encoding)...)
 	data = append(data, varIntEncode(len(m.Content))...)
@@ -249,10 +249,10 @@ func MsgInfoDecode(data []byte) *MsgInfo {
 	m.Behavior = order.Uint32(data[offset : offset+4])
 	offset += 4
 
-	m.SignKey, n = DecodeKey(data[offset:])
+	m.SignKey, n = DecodePubKey(data[offset:])
 	offset += n
 
-	m.EncryptKey, n = DecodeKey(data[offset:])
+	m.EncryptKey, n = DecodePubKey(data[offset:])
 	offset += n
 
 	m.DestRipe = append([]byte{}, data[offset:offset+20]...)
@@ -311,10 +311,10 @@ func BroadcastInfoDecode(data []byte) *BroadcastInfo {
 	b.Behavior = order.Uint32(data[offset:offset+4])
 	offset += 4
 
-	b.SignKey, n = DecodeKey(data[offset:])
+	b.SignKey, n = DecodePubKey(data[offset:])
 	offset += n
 
-	b.EncryptKey, n = DecodeKey(data[offset:])
+	b.EncryptKey, n = DecodePubKey(data[offset:])
 	offset += n
 
 	b.TrialsPerByte, n = varIntDecode(data[offset:])
@@ -345,8 +345,8 @@ func (b *BroadcastInfo) Encode() []byte {
 	data = append(data, varIntEncode(b.AddrVersion)...)
 	data = append(data, varIntEncode(b.Stream)...)
 	data = append(data, packUint(order, b.Behavior)...)
-	data = append(data, b.SignKey.Encode()...)
-	data = append(data, b.EncryptKey.Encode()...)
+	data = append(data, b.SignKey.EncodePub()...)
+	data = append(data, b.EncryptKey.EncodePub()...)
 	data = append(data, varIntEncode(b.TrialsPerByte)...)
 	data = append(data, varIntEncode(b.ExtraBytes)...)
 	data = append(data, varIntEncode(b.Encoding)...)
