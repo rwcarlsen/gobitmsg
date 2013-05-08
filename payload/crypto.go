@@ -19,9 +19,6 @@ func getCurve() elliptic.Curve {
 	return kelliptic.S256()
 }
 
-// RandNonce is used to detect connections to self
-var RandNonce = uint64(mrand.Uint32())
-
 func FuzzyTime(giveTake time.Duration) time.Time {
 	t := time.Now()
 	fuzz := time.Duration((mrand.Float64()-0.5)*float64(giveTake)) * time.Second

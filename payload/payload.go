@@ -3,6 +3,7 @@ package payload
 import (
 	"crypto/sha512"
 	"time"
+	"math/rand"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 )
@@ -13,17 +14,22 @@ const (
 	DefaultFuzz      = 300 * time.Second
 )
 
+const BroadcastVersion = 2
+
+// RandNonce is used to detect connections to self
+var RandNonce = uint64(rand.Uint32())
+
 var order = msg.Order
 
 type Version struct {
 	protocol  uint32
 	Services  uint64
-	Timestamp time.Time    // Unix int64
-	ToAddr    *AddressInfo // short (w/o time and stream)
-	FromAddr  *AddressInfo // short (w/o time and stream)
-	Nonce     uint64
-	UserAgent string // var_str
-	Streams   []int  // var_int_list
+	Timestamp time.Time
+	ToAddr    *AddressInfo
+	FromAddr  *AddressInfo
+	nonce     uint64
+	UserAgent string
+	Streams   []int
 }
 
 func VersionDecode(data []byte) *Version {
@@ -46,7 +52,7 @@ func VersionDecode(data []byte) *Version {
 	v.FromAddr, n = addressInfoDecodeShort(data[offset:])
 	offset += n
 
-	v.Nonce = order.Uint64(data[offset : offset+8])
+	v.nonce = order.Uint64(data[offset : offset+8])
 	offset += 8
 
 	v.UserAgent, n = varStrDecode(data[offset:])
@@ -61,19 +67,26 @@ func (v *Version) Encode() []byte {
 	if v.protocol == 0 {
 		v.protocol = msg.ProtocolVersion
 	}
+	if v.nonce == 0 {
+		v.nonce = RandNonce
+	}
 
 	data := packUint(order, v.protocol)
 	data = append(data, packUint(order, v.Services)...)
 	data = append(data, packUint(order, uint64(v.Timestamp.Unix()))...)
 	data = append(data, v.ToAddr.encodeShort()...)
 	data = append(data, v.FromAddr.encodeShort()...)
-	data = append(data, packUint(order, v.Nonce)...)
+	data = append(data, packUint(order, v.nonce)...)
 	data = append(data, varStrEncode(v.UserAgent)...)
 	return append(data, intListEncode(v.Streams)...)
 }
 
 func (v *Version) Protocol() uint32 {
 	return v.protocol
+}
+
+func (v *Version) Nonce() uint64 {
+	return v.nonce
 }
 
 func AddrDecode(data []byte) []*AddressInfo {
@@ -198,7 +211,6 @@ type PubKey struct {
 	EncryptKey    *Key
 	TrialsPerByte int
 	ExtraBytes    int
-	SigLen        int
 	signature     []byte // ECDSA from beginning through ExtraBytes
 }
 
@@ -233,7 +245,7 @@ func PubKeyDecode(data []byte) *PubKey {
 	k.ExtraBytes, n = varIntDecode(data[offset:])
 	offset += n
 
-	k.SigLen, n = varIntDecode(data[offset:])
+	_, n = varIntDecode(data[offset:])
 	offset += n
 
 	k.signature = append([]byte{}, data[offset:]...)
@@ -330,7 +342,7 @@ func (m *Message) PowNonce() uint64 {
 type Broadcast struct {
 	powNonce uint64
 	Time     time.Time
-	Version  int
+	version  int
 	Stream   int
 	Data     []byte
 }
@@ -345,7 +357,7 @@ func BroadcastDecode(data []byte) *Broadcast {
 	b.Time = time.Unix(int64(order.Uint64(data[offset:offset+8])), 0)
 	offset += 8
 
-	b.Version, n = varIntDecode(data[offset:])
+	b.version, n = varIntDecode(data[offset:])
 	offset += n
 
 	b.Stream, n = varIntDecode(data[offset:])
@@ -357,8 +369,12 @@ func BroadcastDecode(data []byte) *Broadcast {
 }
 
 func (b *Broadcast) Encode() []byte {
+	if b.version == 0 {
+		b.version = BroadcastVersion
+	}
+
 	data := packUint(order, b.Time.Unix())
-	data = append(data, varIntEncode(b.Version)...)
+	data = append(data, varIntEncode(b.version)...)
 	data = append(data, varIntEncode(b.Stream)...)
 	data = append(data, b.Data...)
 
@@ -371,3 +387,8 @@ func (b *Broadcast) Encode() []byte {
 func (b *Broadcast) PowNonce() uint64 {
 	return b.powNonce
 }
+
+func (b *Broadcast) Version() int {
+	return b.version
+}
+
