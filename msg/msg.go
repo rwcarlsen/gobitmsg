@@ -1,6 +1,7 @@
 package msg
 
 import (
+	"io"
 	"crypto"
 	_ "crypto/sha512"
 	"encoding/binary"
@@ -16,28 +17,24 @@ type Command string
 
 // message types
 const (
-	Version    Command = "version"
-	VersionAck         = "verack"
-	Address            = "addr"
-	Inventory          = "inv"
-	GetData            = "getdata"
-	GetPubKey          = "getpubkey"
-	PubKey             = "pubkey"
-	Msg                = "msg"
-	Broadcast          = "broadcast"
+	Tversion    Command = "version"
+	TversionAck         = "verack"
+	Taddress            = "addr"
+	Tinventory          = "inv"
+	TgetData            = "getdata"
+	TgetPubKey          = "getpubkey"
+	TpubKey             = "pubkey"
+	Tmsg                = "msg"
+	Tbroadcast          = "broadcast"
 )
 
 var Order = binary.BigEndian
 
-type Message interface {
-	Cmd() Command
-	Payload() []byte
-	Len() uint32
-	Checksum() uint32
-	Magic() uint32
+type Encoder interface {
+	Encode() []byte
 }
 
-type msg struct {
+type Msg struct {
 	magic   uint32
 	command Command
 	payload []byte
@@ -47,7 +44,7 @@ type msg struct {
 	checksum uint32
 }
 
-func New(cmd Command, payload []byte) Message {
+func New(cmd Command, payload []byte) *Msg {
 	h := Hash.New()
 	_, err := h.Write(payload)
 	if err != nil {
@@ -56,7 +53,7 @@ func New(cmd Command, payload []byte) Message {
 	slice := h.Sum(nil)
 	sum := Order.Uint32(slice[:4])
 
-	return &msg{
+	return &Msg{
 		magic:    Magic,
 		command:  cmd,
 		payload:  payload,
@@ -65,27 +62,32 @@ func New(cmd Command, payload []byte) Message {
 	}
 }
 
-func (m *msg) Magic() uint32 {
-	return m.magic
+func Decode(r io.Reader) (*Msg, error) {
+	buf := make([]byte, 24)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return nil, err
+	}
+
+	magic := Order.Uint32(buf[:4])
+	command := Command(nullUnpad(buf[4:16]))
+	length := Order.Uint32(buf[16:20])
+	checksum := Order.Uint32(buf[20:24])
+
+	data := make([]byte, length)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+
+	return &Msg{
+		magic: magic,
+		command: command,
+		length: length,
+		checksum: checksum,
+		payload:  data,
+	}, nil
 }
 
-func (m *msg) Cmd() Command {
-	return m.command
-}
-
-func (m *msg) Payload() []byte {
-	return m.payload
-}
-
-func (m *msg) Len() uint32 {
-	return m.length
-}
-
-func (m *msg) Checksum() uint32 {
-	return m.checksum
-}
-
-func Encode(m Message) []byte {
+func (m *Msg) Encode() []byte {
 	data := make([]byte, 24, 24+m.Len())
 	cmd := nullPad([]byte(m.Cmd()), 12)
 
@@ -96,14 +98,42 @@ func Encode(m Message) []byte {
 	return append(data, m.Payload()...)
 }
 
-func Decode(data []byte) Message {
-	return &msg{
-		magic:    Order.Uint32(data[:4]),
-		command:  Command(nullUnpad(data[4:16])),
-		length:   Order.Uint32(data[16:20]),
-		checksum: Order.Uint32(data[20:24]),
-		payload:  data[24:],
+func (m *Msg) Magic() uint32 {
+	return m.magic
+}
+
+func (m *Msg) Cmd() Command {
+	return m.command
+}
+
+func (m *Msg) Payload() []byte {
+	return m.payload
+}
+
+func (m *Msg) Len() uint32 {
+	return m.length
+}
+
+func (m *Msg) Checksum() uint32 {
+	return m.checksum
+}
+
+func (m *Msg) IsValid() bool {
+	validLen := int(m.Len()) == len(m.Payload())
+	validSum := m.isChecksumValid()
+	validMagic := m.Magic() == Magic
+
+	return validLen && validSum && validMagic
+}
+
+func (m *Msg) isChecksumValid() bool {
+	h := Hash.New()
+	_, err := h.Write(m.Payload())
+	if err != nil {
+		panic(err)
 	}
+
+	return Order.Uint32(h.Sum(nil)[:4]) == m.Checksum()
 }
 
 func nullPad(data []byte, totLen int) []byte {
@@ -123,20 +153,3 @@ func nullUnpad(data []byte) []byte {
 	return data
 }
 
-func IsValid(m Message) bool {
-	validLen := int(m.Len()) == len(m.Payload())
-	validSum := isChecksumValid(m)
-	validMagic := m.Magic() == Magic
-
-	return validLen && validSum && validMagic
-}
-
-func isChecksumValid(m Message) bool {
-	h := Hash.New()
-	_, err := h.Write(m.Payload())
-	if err != nil {
-		panic(err)
-	}
-
-	return Order.Uint32(h.Sum(nil)[:4]) == m.Checksum()
-}
