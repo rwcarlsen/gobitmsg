@@ -17,15 +17,15 @@ type Command string
 
 // message types
 const (
-	Tversion    Command = "version"
-	TversionAck         = "verack"
-	Taddress            = "addr"
-	Tinventory          = "inv"
-	TgetData            = "getdata"
-	TgetPubKey          = "getpubkey"
-	TpubKey             = "pubkey"
-	Tmsg                = "msg"
-	Tbroadcast          = "broadcast"
+	Cversion    Command = "version"
+	CversionAck         = "verack"
+	Caddress            = "addr"
+	Cinventory          = "inv"
+	CgetData            = "getdata"
+	CgetPubKey          = "getpubkey"
+	CpubKey             = "pubkey"
+	Cmsg                = "msg"
+	Cbroadcast          = "broadcast"
 )
 
 var Order = binary.BigEndian
@@ -88,14 +88,14 @@ func Decode(r io.Reader) (*Msg, error) {
 }
 
 func (m *Msg) Encode() []byte {
-	data := make([]byte, 24, 24+m.Len())
-	cmd := nullPad([]byte(m.Cmd()), 12)
+	data := make([]byte, 24, 24+m.length)
+	cmd := nullPad([]byte(m.command), 12)
 
-	Order.PutUint32(data[:4], m.Magic())
+	Order.PutUint32(data[:4], m.magic)
 	copy(data[4:16], cmd)
-	Order.PutUint32(data[16:20], m.Len())
-	Order.PutUint32(data[20:24], m.Checksum())
-	return append(data, m.Payload()...)
+	Order.PutUint32(data[16:20], m.length)
+	Order.PutUint32(data[20:24], m.checksum)
+	return append(data, m.payload...)
 }
 
 func (m *Msg) Magic() uint32 {

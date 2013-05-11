@@ -13,7 +13,6 @@ type Handler interface {
 
 type Node struct {
 	addr    string
-	done    chan bool
 	handler Handler
 }
 
@@ -23,13 +22,16 @@ func NewNode(addr string, h Handler) *Node {
 	return &Node{
 		addr:    addr,
 		handler: h,
-		done:    make(chan bool),
 	}
 }
 
 // Addr returns the local network address this node listens on.
 func (n *Node) Addr() string {
 	return n.addr
+}
+
+func (n *Node) GetHandler() Handler {
+	return n.handler
 }
 
 // Send sends message m to another p2p node at addr.  If message m fails
@@ -54,10 +56,10 @@ func (n *Node) Send(addr string, m *msg.Msg) (resp *msg.Msg, err error) {
 	return resp, nil
 }
 
-// Start sets the node to begin listening for and serving messages to/from
-// other nodes in daemon mode.  This method does not block and returns
-// immediately.
-func (n *Node) Start() error {
+// ListenAndServe sets the node to begin listening for and serving messages
+// to/from other nodes in daemon mode.  This method does not block and
+// returns immediately.
+func (n *Node) ListenAndServe() error {
 	if err := n.listen(); err != nil {
 		return err
 	}
@@ -72,16 +74,11 @@ func (n *Node) listen() error {
 
 	go func() {
 		for {
-			select {
-			case <-n.done:
-				return
-			default:
-				conn, err := ln.Accept()
-				if err != nil {
-					continue
-				}
-				go n.handleConn(conn)
+			conn, err := ln.Accept()
+			if err != nil {
+				continue
 			}
+			go n.handleConn(conn)
 		}
 	}()
 	return nil
@@ -95,11 +92,5 @@ func (n *Node) handleConn(conn net.Conn) {
 	}
 	n.handler.Handle(conn, m)
 	conn.Close()
-}
-
-// Stop stops a started node from network listening/serving. Do not call
-// Stop without first calling Start successfully (no error returned).
-func (n *Node) Stop() {
-	n.done <- true
 }
 
