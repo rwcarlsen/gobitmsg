@@ -11,6 +11,28 @@ type Handler interface {
 	Handle(w io.Writer, m *msg.Msg)
 }
 
+// Send sends message m to another p2p node at addr.  If message m fails
+// to be sent, an error is returned.  If the receiver does not respond or
+// responds with an invalid message, an error is returned.
+func Send(addr string, m *msg.Msg) (resp *msg.Msg, err error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = conn.Write(m.Encode())
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err = msg.Decode(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 type Node struct {
 	addr    string
 	handler Handler
@@ -32,28 +54,6 @@ func (n *Node) Addr() string {
 
 func (n *Node) GetHandler() Handler {
 	return n.handler
-}
-
-// Send sends message m to another p2p node at addr.  If message m fails
-// to be sent, an error is returned.  If the receiver does not respond or
-// responds with an invalid message, an error is returned.
-func (n *Node) Send(addr string, m *msg.Msg) (resp *msg.Msg, err error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = conn.Write(m.Encode())
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err = msg.Decode(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
 }
 
 // ListenAndServe sets the node to begin listening for and serving messages

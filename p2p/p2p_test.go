@@ -5,12 +5,12 @@ import (
 	"testing"
 	"io"
 
-	"github.com/rwcarlsen/gobitmsg/message"
+	"github.com/rwcarlsen/gobitmsg/msg"
 )
 
 type TestHandler struct {}
 
-func (h *TestHandler) Handle(w io.Writer, m *message.Msg) {
+func (h *TestHandler) Handle(w io.Writer, m *msg.Msg) {
 	w.Write(m.Encode())
 }
 
@@ -25,8 +25,8 @@ func TestSendAndRespond(t *testing.T) {
 		t.Fatalf("node2 failed to start: %v", err)
 	}
 
-	m := message.New(message.Cversion, []byte("hello from node1"))
-	resp, err := node1.Send(node2.Addr(), m)
+	m := msg.New(msg.Cversion, []byte("hello from node1"))
+	resp, err := Send(node2.Addr(), m)
 	if  err != nil {
 		t.Errorf("node1 -> node2 send failed: %v", err)
 	} else if !bytes.Equal(m.Payload(), resp.Payload()) {
