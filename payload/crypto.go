@@ -1,10 +1,11 @@
 package payload
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha1"
+	_ "crypto/sha1"
 	"crypto/sha512"
 	"encoding/asn1"
 	"math"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/rwcarlsen/koblitz/kelliptic"
 )
+
+var signHash = crypto.SHA1
 
 func getCurve() elliptic.Curve {
 	return kelliptic.S256()
@@ -71,12 +74,11 @@ func (k *Key) EncodePub() []byte {
 }
 
 func (k *Key) Verify(data, sig []byte) bool {
-	// I think openssl (and pybitmessage) use sha1 for the hash
-	h := sha1.New()
+	h := signHash.New()
 	h.Write(data)
 	hash := h.Sum(nil)
 
-	vals := struct{ R, S *big.Int }{}
+	vals := signVals{}
 	if _, err := asn1.Unmarshal(sig, &vals); err != nil {
 		return false
 	}
@@ -84,10 +86,13 @@ func (k *Key) Verify(data, sig []byte) bool {
 	return ecdsa.Verify(&k.PublicKey, hash, vals.R, vals.S)
 }
 
+type signVals struct {
+	R, S *big.Int
+}
+
 // TODO: make sure hash and signature encoding are correct
 func (k *Key) Sign(data []byte) (signature []byte, err error) {
-	// I think openssl (and pybitmessage) use sha1 for the hash
-	h := sha1.New()
+	h := signHash.New()
 	h.Write(data)
 	hash := h.Sum(nil)
 
@@ -95,7 +100,7 @@ func (k *Key) Sign(data []byte) (signature []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return asn1.Marshal(struct{ R, S *big.Int }{r, s})
+	return asn1.Marshal(signVals{r, s})
 }
 
 func (k *Key) Encrypt(data []byte) []byte {
