@@ -76,7 +76,7 @@ func (k *Key) Verify(data, sig []byte) bool {
 	h.Write(data)
 	hash := h.Sum(nil)
 
-	vals := struct{R, S *big.Int}{}
+	vals := struct{ R, S *big.Int }{}
 	if _, err := asn1.Unmarshal(sig, &vals); err != nil {
 		return false
 	}
