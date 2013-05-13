@@ -1,29 +1,41 @@
 package payload
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	_ "crypto/sha1"
 	"crypto/sha512"
+	"encoding/asn1"
 	"math"
-	"math/rand"
+	"math/big"
+	mrand "math/rand"
 	"time"
+
+	"github.com/rwcarlsen/koblitz/kelliptic"
 )
 
-// RandNonce is used to detect connections to self
-var RandNonce = uint64(rand.Uint32())
+var signHash = crypto.SHA1
+
+func getCurve() elliptic.Curve {
+	return kelliptic.S256()
+}
 
 func FuzzyTime(giveTake time.Duration) time.Time {
 	t := time.Now()
-	fuzz := time.Duration((rand.Float64()-0.5)*float64(giveTake)) * time.Second
+	fuzz := time.Duration((mrand.Float64()-0.5)*float64(giveTake)) * time.Second
 	return t.Add(fuzz)
 }
 
 // proofOfWork returns a pow nonce for data.
-func proofOfWork(data []byte) (nonce uint64) {
+func proofOfWork(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
 	h := sha512.New()
 	h.Write(data)
 	kernel := h.Sum(nil)
 
 	trial := uint64(math.MaxUint64)
-	target := math.MaxUint64 / ((uint64(len(data)) + PowExtraLen + 8) * PowTrialsPerByte)
+	target := math.MaxUint64 / uint64((len(data)+extraLen+8)*trialsPerByte)
 	for nonce = 0; trial > target; nonce++ {
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
@@ -36,14 +48,65 @@ func proofOfWork(data []byte) (nonce uint64) {
 	return nonce
 }
 
-// Encrypt encrypts data and returns the result.
-// TODO: implement
-func Encrypt(data []byte, encryptKey []byte) []byte {
-	return data
+type Key struct {
+	*ecdsa.PrivateKey
 }
 
-// Decrypt decrypts data and returns the result.
-// TODO: implement
-func Decrypt(data []byte, encryptKey, signKey []byte) []byte {
-	return data
+func NewKey() (*Key, error) {
+	priv, err := ecdsa.GenerateKey(getCurve(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return &Key{priv}, nil
+}
+
+// Decode decodes a public key from data into k.
+func DecodePubKey(data []byte) (k *Key, n int) {
+	// PUBLIC KEY ONLY !!!
+	x, y := elliptic.Unmarshal(getCurve(), data[:64])
+	pub := ecdsa.PublicKey{getCurve(), x, y}
+	return &Key{&ecdsa.PrivateKey{PublicKey: pub}}, 64
+}
+
+// Encode encodes the public key portion of this key.
+func (k *Key) EncodePub() []byte {
+	return elliptic.Marshal(k.Curve, k.X, k.Y)
+}
+
+func (k *Key) Verify(data, sig []byte) bool {
+	h := signHash.New()
+	h.Write(data)
+	hash := h.Sum(nil)
+
+	vals := signVals{}
+	if _, err := asn1.Unmarshal(sig, &vals); err != nil {
+		return false
+	}
+
+	return ecdsa.Verify(&k.PublicKey, hash, vals.R, vals.S)
+}
+
+type signVals struct {
+	R, S *big.Int
+}
+
+// TODO: make sure hash and signature encoding are correct
+func (k *Key) Sign(data []byte) (signature []byte, err error) {
+	h := signHash.New()
+	h.Write(data)
+	hash := h.Sum(nil)
+
+	r, s, err := ecdsa.Sign(rand.Reader, k.PrivateKey, hash)
+	if err != nil {
+		return nil, err
+	}
+	return asn1.Marshal(signVals{r, s})
+}
+
+func (k *Key) Encrypt(data []byte) []byte {
+	panic("not implemented")
+}
+
+func (k *Key) Decrypt(data []byte) []byte {
+	panic("not implemented")
 }
