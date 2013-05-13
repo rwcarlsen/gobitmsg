@@ -16,12 +16,12 @@ func (h *TestHandler) Handle(w io.Writer, m *msg.Msg) {
 
 func TestSendAndRespond(t *testing.T) {
 	node1 := NewNode("127.0.0.1:22334", &TestHandler{})
-	if err := node1.ListenAndServe(); err != nil {
+	if err := node1.Start(); err != nil {
 		t.Fatalf("node1 failed to start: %v", err)
 	}
 
 	node2 := NewNode("127.0.0.1:22335", &TestHandler{})
-	if err := node2.ListenAndServe(); err != nil {
+	if err := node2.Start(); err != nil {
 		t.Fatalf("node2 failed to start: %v", err)
 	}
 

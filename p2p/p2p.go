@@ -56,10 +56,10 @@ func (n *Node) GetHandler() Handler {
 	return n.handler
 }
 
-// ListenAndServe sets the node to begin listening for and serving messages
+// Start sets the node to begin listening for and serving messages
 // to/from other nodes in daemon mode.  This method does not block and
 // returns immediately.
-func (n *Node) ListenAndServe() error {
+func (n *Node) Start() error {
 	if err := n.listen(); err != nil {
 		return err
 	}
