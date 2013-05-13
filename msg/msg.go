@@ -1,10 +1,10 @@
 package msg
 
 import (
-	"io"
 	"crypto"
 	_ "crypto/sha512"
 	"encoding/binary"
+	"io"
 )
 
 const (
@@ -17,15 +17,16 @@ type Command string
 
 // message types
 const (
-	Cversion    Command = "version"
-	CversionAck         = "verack"
-	Caddress            = "addr"
-	Cinventory          = "inv"
-	CgetData            = "getdata"
-	CgetPubKey          = "getpubkey"
-	CpubKey             = "pubkey"
-	Cmsg                = "msg"
-	Cbroadcast          = "broadcast"
+	Cversion   Command = "version"
+	Cverack            = "verack"
+	Cgetaddr           = "getaddr"
+	Caddr              = "addr"
+	Cinv               = "inv"
+	Cgetdata           = "getdata"
+	CgetpubKey         = "getpubkey"
+	Cpubkey            = "pubkey"
+	Cmsg               = "msg"
+	Cbroadcast         = "broadcast"
 )
 
 var Order = binary.BigEndian
@@ -79,9 +80,9 @@ func Decode(r io.Reader) (*Msg, error) {
 	}
 
 	return &Msg{
-		magic: magic,
-		command: command,
-		length: length,
+		magic:    magic,
+		command:  command,
+		length:   length,
 		checksum: checksum,
 		payload:  data,
 	}, nil
@@ -152,4 +153,3 @@ func nullUnpad(data []byte) []byte {
 	}
 	return data
 }
-
