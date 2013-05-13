@@ -4,7 +4,7 @@ import (
 	"crypto/sha512"
 	"time"
 
-	"github.com/rwcarlsen/gobitmsg/message"
+	"github.com/rwcarlsen/gobitmsg/msg"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 	DefaultFuzz      = 300 * time.Second
 )
 
-var order = message.Order
+var order = msg.Order
 
 type Version struct {
 	protocol  uint32
@@ -59,7 +59,7 @@ func VersionDecode(data []byte) *Version {
 
 func (v *Version) Encode() []byte {
 	if v.protocol == 0 {
-		v.protocol = message.ProtocolVersion
+		v.protocol = msg.ProtocolVersion
 	}
 
 	data := packUint(order, v.protocol)
