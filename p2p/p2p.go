@@ -3,57 +3,71 @@ package p2p
 import (
 	"io"
 	"net"
+	"time"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 )
 
+const (
+	DefaultTimeout = 10 * time.Second
+)
+
 type Handler interface {
-	Handle(w io.Writer, m *msg.Msg)
+	Handle(w io.WriteCloser, m *msg.Msg)
 }
 
-// Send sends message m to another p2p node at addr.  If message m fails
-// to be sent, an error is returned.  If the receiver does not respond or
-// responds with an invalid message, an error is returned.
-func Send(addr string, m *msg.Msg) (resp *msg.Msg, err error) {
-	conn, err := net.Dial("tcp", addr)
+type Peer struct {
+	Addr string
+}
+
+func NewPeer(addr string) *Peer {
+	return &Peer{
+		Addr: addr,
+	}
+}
+
+// Send opens a stream with the peer and sends encoded message m.
+// Received responses and further back/forth communication will be passed
+// to the handler.  h is responsible for closing the connection when
+// finished.  Send blocks until h closes the connection.
+func (p *Peer) Send(m *msg.Msg, h Handler) error {
+	conn, err := net.DialTimeout("tcp", p.Addr, DefaultTimeout)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, err = conn.Write(m.Encode())
-	if err != nil {
-		return nil, err
+	if _, err := conn.Write(m.Encode()); err != nil {
+		return err
 	}
 
-	resp, err = msg.Decode(conn)
-	if err != nil {
-		return nil, err
-	}
+	for {
+		// gracefully handle connections closed by handler
+		if _, err := conn.Read(make([]byte, 0)); err != nil && err != io.EOF {
+			return nil
+		}
 
-	return resp, nil
+		m, err := msg.Decode(conn)
+		if err != nil {
+			return err
+		}
+		h.Handle(conn, m)
+	}
 }
 
 type Node struct {
-	addr    string
-	handler Handler
+	Addr string
+	handler   Handler
 }
+
 
 // NewNode creates and returns a new p2p node that listens on network
-// address addr.  Incoming messages from other nodes are passed to h.
+// address addr.  Incoming message streams from other nodes are passed to
+// h.  h is responsible for closing connections when finished.
 func NewNode(addr string, h Handler) *Node {
 	return &Node{
-		addr:    addr,
+		Addr: addr,
 		handler: h,
 	}
-}
-
-// Addr returns the local network address this node listens on.
-func (n *Node) Addr() string {
-	return n.addr
-}
-
-func (n *Node) GetHandler() Handler {
-	return n.handler
 }
 
 // Start sets the node to begin listening for and serving messages
@@ -67,7 +81,7 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) listen() error {
-	ln, err := net.Listen("tcp", n.addr)
+	ln, err := net.Listen("tcp", n.Addr)
 	if err != nil {
 		return err
 	}
@@ -85,12 +99,12 @@ func (n *Node) listen() error {
 }
 
 func (n *Node) handleConn(conn net.Conn) {
-	m, err := msg.Decode(conn)
-	if err != nil {
-		// log error
-		return
+	for {
+		m, err := msg.Decode(conn)
+		if err != nil {
+			// log error
+			return
+		}
+		n.handler.Handle(conn, m)
 	}
-	n.handler.Handle(conn, m)
-	conn.Close()
 }
-
