@@ -18,7 +18,7 @@ func main() {
 		Time: tm,
 		Stream: 1,
 		Services: 1,
-		Ip: "128.104.186.18",
+		Ip: "127.0.0.1",
 		Port: 19840,
 	}
 
@@ -46,7 +46,7 @@ func main() {
 	//	log.Fatalf("node failed to start: %v", err)
 	//}
 
-	p := p2p.NewPeer("98.28.255.178:8444")
+	p := p2p.NewPeer("127.0.0.1:8444")
 	if err := p.Send(m, &SendHandler{}); err != nil {
 		log.Fatalf("message send failed: %v", err)
 	}
@@ -68,43 +68,11 @@ func (h *SendHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 		w.Write(msg.New(msg.Cverack, []byte{}).Encode())
 	case msg.Caddr:
 	case msg.Cinv:
-		log.Printf("communication complete", cmd)
+		log.Print("communication complete")
 		w.Close()
 	default:
 		log.Printf("msg type %v from peer is unanticipated", cmd)
 
 	}
 }
-
-//	m := msg.New(msg.Cversion, v.Encode())
-//	if _, err := conn.Write(m.Encode()); err != nil {
-//		return nil, err
-//	}
-//
-//	// receive verack
-//	resp, err := msg.Decode(conn)
-//	if err != nil {
-//		return nil, err
-//	} else if resp.Cmd() != msg.Cverack {
-//		return nil, fmt.Errorf("Expected msg type %v, got %v",
-//			msg.Cverack, resp.Cmd())
-//	}
-//
-//	// receive version response
-//	resp, err := msg.Decode(conn)
-//	if err != nil {
-//		return nil, err
-//	} else if resp.Cmd() != msg.Cversion {
-//		return nil, fmt.Errorf("Expected msg type %v, got %v",
-//			msg.Cversion, resp.Cmd())
-//	}
-//
-//	v, err = payload.VersionDecode(resp.Payload())
-//	if err != nil {
-//		return nil, fmt.Errorf("Failed to decode version response: %v", err)
-//	}
-//
-//	// send verack
-//	conn.Write(msg.New(msg.Cverack, []byte{}).Encode())
-//	return v, nil
 

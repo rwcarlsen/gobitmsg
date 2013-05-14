@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	DefaultTimeout = 1000 * time.Second
+	DefaultTimeout = 10 * time.Second
 )
 
 type Handler interface {
@@ -41,6 +41,11 @@ func (p *Peer) Send(m *msg.Msg, h Handler) error {
 	}
 
 	for {
+		// gracefully handle connections closed by handler
+		if _, err := conn.Read(make([]byte, 0)); err != nil && err != io.EOF {
+			return nil
+		}
+
 		m, err := msg.Decode(conn)
 		if err != nil {
 			return err
