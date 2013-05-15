@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -13,25 +14,25 @@ const (
 )
 
 type Handler interface {
-	Handle(w io.WriteCloser, m *msg.Msg)
+	Handle(conn net.Conn)
 }
 
-type Peer struct {
-	Addr string
-}
-
-func NewPeer(addr string) *Peer {
-	return &Peer{
-		Addr: addr,
+func ReadMsg(conn net.Conn, cmd Command) (*msg.Msg, error) {
+	m, err := msg.Decode(conn)
+	if err != nil {
+		return nil, err
+	} else if m.Cmd() != cmd {
+		return nil, fmt.Errorf("p2p: decoded msg of wrong type (expected %v, got %v)", m.Cmd(), cmd)
 	}
+	return m, nil
 }
 
-// Send opens a stream with the peer and sends encoded message m.
+// Send opens a stream with the peer at addr and sends encoded message m.
 // Received responses and further back/forth communication will be passed
 // to the handler.  h is responsible for closing the connection when
-// finished.  Send blocks until h closes the connection.
-func (p *Peer) Send(m *msg.Msg, h Handler) error {
-	conn, err := net.DialTimeout("tcp", p.Addr, DefaultTimeout)
+// finished.  Send blocks until h or the peer closes the connection.
+func Send(addr string, m *msg.Msg, h Handler) error {
+	conn, err := net.DialTimeout("tcp", addr, DefaultTimeout)
 	if err != nil {
 		return err
 	}
@@ -41,30 +42,27 @@ func (p *Peer) Send(m *msg.Msg, h Handler) error {
 	}
 
 	for {
-		// gracefully handle connections closed by handler
 		if _, err := conn.Read(make([]byte, 0)); err != nil && err != io.EOF {
+			// gracefully handle connections closed by handler
 			return nil
 		}
-
-		m, err := msg.Decode(conn)
-		if err != nil {
-			return err
-		}
-		h.Handle(conn, m)
+		h.Handle(conn)
 	}
+	return nil
 }
 
 type Node struct {
-	Addr    string
-	handler Handler
+	Addr string
+	handler   Handler
 }
+
 
 // NewNode creates and returns a new p2p node that listens on network
 // address addr.  Incoming message streams from other nodes are passed to
 // h.  h is responsible for closing connections when finished.
 func NewNode(addr string, h Handler) *Node {
 	return &Node{
-		Addr:    addr,
+		Addr: addr,
 		handler: h,
 	}
 }
@@ -98,12 +96,17 @@ func (n *Node) listen() error {
 }
 
 func (n *Node) handleConn(conn net.Conn) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+		}
+	}()
 	for {
-		m, err := msg.Decode(conn)
-		if err != nil {
-			// log error
+		if _, err := conn.Read(make([]byte, 0)); err != nil && err != io.EOF {
+			// gracefully handle connections closed by handler
 			return
 		}
-		n.handler.Handle(conn, m)
+		n.handler.Handle(conn)
 	}
 }
+
