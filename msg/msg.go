@@ -4,6 +4,7 @@ import (
 	"crypto"
 	_ "crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -30,10 +31,6 @@ const (
 )
 
 var Order = binary.BigEndian
-
-type Encoder interface {
-	Encode() []byte
-}
 
 type Msg struct {
 	magic   uint32
@@ -79,13 +76,21 @@ func Decode(r io.Reader) (*Msg, error) {
 		return nil, err
 	}
 
-	return &Msg{
+	m := &Msg{
 		magic:    magic,
 		command:  command,
 		length:   length,
 		checksum: checksum,
 		payload:  data,
-	}, nil
+	}
+
+	if !m.validChecksum() {
+		return nil, fmt.Errorf("msg: message decode failed - bad checksum")
+	} else if m.magic != Magic {
+		return nil, fmt.Errorf("msg: message decode failed - invalid magic '%x'", m.magic)
+	}
+
+	return m, nil
 }
 
 func (m *Msg) Encode() []byte {
@@ -99,10 +104,6 @@ func (m *Msg) Encode() []byte {
 	return append(data, m.payload...)
 }
 
-func (m *Msg) Magic() uint32 {
-	return m.magic
-}
-
 func (m *Msg) Cmd() Command {
 	return m.command
 }
@@ -111,30 +112,13 @@ func (m *Msg) Payload() []byte {
 	return m.payload
 }
 
-func (m *Msg) Len() uint32 {
-	return m.length
-}
-
-func (m *Msg) Checksum() uint32 {
-	return m.checksum
-}
-
-func (m *Msg) IsValid() bool {
-	validLen := int(m.Len()) == len(m.Payload())
-	validSum := m.isChecksumValid()
-	validMagic := m.Magic() == Magic
-
-	return validLen && validSum && validMagic
-}
-
-func (m *Msg) isChecksumValid() bool {
+func (m *Msg) validChecksum() bool {
 	h := Hash.New()
 	_, err := h.Write(m.Payload())
 	if err != nil {
 		panic(err)
 	}
-
-	return Order.Uint32(h.Sum(nil)[:4]) == m.Checksum()
+	return Order.Uint32(h.Sum(nil)[:4]) == m.checksum
 }
 
 func nullPad(data []byte, totLen int) []byte {

@@ -2,8 +2,8 @@ package p2p
 
 import (
 	"bytes"
-	"testing"
 	"io"
+	"testing"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 )
@@ -17,7 +17,7 @@ func (h *SendHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 	w.Close()
 }
 
-type RecvHandler struct {}
+type RecvHandler struct{}
 
 func (h *RecvHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 	w.Write(m.Encode())

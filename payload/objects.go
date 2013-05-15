@@ -1,6 +1,7 @@
 package payload
 
 import (
+	"errors"
 	"time"
 )
 
@@ -18,8 +19,15 @@ type GetPubKey struct {
 	RipeHash    []byte
 }
 
-func GetPubKeyDecode(data []byte) *GetPubKey {
-	g := &GetPubKey{}
+func GetPubKeyDecode(data []byte) (g *GetPubKey, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			g = nil
+			err = errors.New("payload: failed to decode getpubkey payload (malformed)")
+		}
+	}()
+
+	g = &GetPubKey{}
 
 	g.powNonce = order.Uint64(data[:8])
 	offset := 8
@@ -36,7 +44,7 @@ func GetPubKeyDecode(data []byte) *GetPubKey {
 
 	g.RipeHash = data[offset:]
 
-	return g
+	return g, nil
 }
 
 func (g *GetPubKey) Encode() []byte {
@@ -68,8 +76,15 @@ type PubKey struct {
 	signature     []byte // ECDSA from beginning through ExtraBytes
 }
 
-func PubKeyDecode(data []byte) *PubKey {
-	k := &PubKey{}
+func PubKeyDecode(data []byte) (k *PubKey, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			k = nil
+			err = errors.New("payload: failed to decode pubkey payload (malformed)")
+		}
+	}()
+
+	k = &PubKey{}
 
 	k.powNonce = order.Uint64(data[:8])
 	offset := 8
@@ -104,7 +119,7 @@ func PubKeyDecode(data []byte) *PubKey {
 
 	k.signature = append([]byte{}, data[offset:]...)
 
-	return k
+	return k, nil
 }
 
 func (k *PubKey) Encode() []byte {
@@ -148,8 +163,15 @@ type Message struct {
 	Data   []byte
 }
 
-func MessageDecode(data []byte) *Message {
-	m := &Message{}
+func MessageDecode(data []byte) (m *Message, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			m = nil
+			err = errors.New("payload: failed to decode msg payload (malformed)")
+		}
+	}()
+
+	m = &Message{}
 
 	m.powNonce = order.Uint64(data[:8])
 	offset := 8
@@ -163,7 +185,7 @@ func MessageDecode(data []byte) *Message {
 
 	m.Data = data[offset:]
 
-	return m
+	return m, nil
 }
 
 // NewMessage is a convenience function for creating a message with
@@ -216,8 +238,15 @@ func NewBroadcast(bi *BroadcastInfo, stream int) *Broadcast {
 	}
 }
 
-func BroadcastDecode(data []byte) *Broadcast {
-	b := &Broadcast{}
+func BroadcastDecode(data []byte) (b *Broadcast, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			b = nil
+			err = errors.New("payload: failed to decode broadcast payload (malformed)")
+		}
+	}()
+
+	b = &Broadcast{}
 	var n int
 
 	b.powNonce = order.Uint64(data[:8])
@@ -234,7 +263,7 @@ func BroadcastDecode(data []byte) *Broadcast {
 
 	b.Data = data[offset:]
 
-	return b
+	return b, nil
 }
 
 func (b *Broadcast) Encode() []byte {

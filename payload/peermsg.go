@@ -27,8 +27,15 @@ type Version struct {
 	Streams   []int
 }
 
-func VersionDecode(data []byte) *Version {
-	v := &Version{}
+func VersionDecode(data []byte) (v *Version, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			v = nil
+			err = fmt.Errorf("payload: failed to decode version payload (malformed)")
+		}
+	}()
+
+	v = &Version{}
 
 	v.protocol = order.Uint32(data[:4])
 	offset := 4
@@ -55,7 +62,7 @@ func VersionDecode(data []byte) *Version {
 
 	v.Streams, _ = intListDecode(data[offset:])
 
-	return v
+	return v, nil
 }
 
 func (v *Version) Encode() []byte {
@@ -84,15 +91,22 @@ func (v *Version) Nonce() uint64 {
 	return v.nonce
 }
 
-func AddrDecode(data []byte) []*AddressInfo {
+func AddrDecode(data []byte) (a []*AddressInfo, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			a = nil
+			err = fmt.Errorf("payload: failed to decode addr payload (malformed)")
+		}
+	}()
+
 	nAddr, offset := varIntDecode(data)
-	addresses := make([]*AddressInfo, nAddr)
+	a = make([]*AddressInfo, nAddr)
 	for i := 0; i < nAddr; i++ {
 		addr, n := addressInfoDecode(data[offset:])
-		addresses[i] = addr
+		a[i] = addr
 		offset += n
 	}
-	return addresses
+	return a, nil
 }
 
 func AddrEncode(addresses ...*AddressInfo) []byte {
@@ -104,7 +118,14 @@ func AddrEncode(addresses ...*AddressInfo) []byte {
 	return data
 }
 
-func InventoryDecode(data []byte) [][]byte {
+func InventoryDecode(data []byte) (inv [][]byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			inv = nil
+			err = fmt.Errorf("payload: failed to decode inv payload (malformed)")
+		}
+	}()
+
 	nObj, offset := varIntDecode(data)
 	objData := make([][]byte, nObj)
 	for i := 0; i < nObj; i++ {
@@ -112,7 +133,7 @@ func InventoryDecode(data []byte) [][]byte {
 		end := start + 32
 		objData[i] = data[start:end]
 	}
-	return objData
+	return objData, nil
 }
 
 func InventoryEncode(objData [][]byte) []byte {
@@ -132,15 +153,22 @@ func InventoryEncode(objData [][]byte) []byte {
 	return data
 }
 
-func GetDataDecode(data []byte) [][]byte {
+func GetDataDecode(data []byte) (hashes [][]byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			hashes = nil
+			err = fmt.Errorf("payload: failed to decode getdata payload (malformed)")
+		}
+	}()
+
 	nHashes, offset := varIntDecode(data)
-	hashes := make([][]byte, nHashes)
+	hashes = make([][]byte, nHashes)
 	for i := 0; i < nHashes; i++ {
 		start := offset + i*32
 		end := start + 32
 		hashes = append(hashes, data[start:end])
 	}
-	return hashes
+	return hashes, nil
 }
 
 func GetDataEncode(hashes [][]byte) []byte {

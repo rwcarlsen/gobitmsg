@@ -55,17 +55,16 @@ func (p *Peer) Send(m *msg.Msg, h Handler) error {
 }
 
 type Node struct {
-	Addr string
-	handler   Handler
+	Addr    string
+	handler Handler
 }
-
 
 // NewNode creates and returns a new p2p node that listens on network
 // address addr.  Incoming message streams from other nodes are passed to
 // h.  h is responsible for closing connections when finished.
 func NewNode(addr string, h Handler) *Node {
 	return &Node{
-		Addr: addr,
+		Addr:    addr,
 		handler: h,
 	}
 }

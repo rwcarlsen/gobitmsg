@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -7,36 +6,36 @@ import (
 	"time"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
-	"github.com/rwcarlsen/gobitmsg/payload"
 	"github.com/rwcarlsen/gobitmsg/p2p"
+	"github.com/rwcarlsen/gobitmsg/payload"
 )
 
 func main() {
 	tm := time.Now()
 
 	myaddr := &payload.AddressInfo{
-		Time: tm,
-		Stream: 1,
+		Time:     tm,
+		Stream:   1,
 		Services: 1,
-		Ip: "127.0.0.1",
-		Port: 19840,
+		Ip:       "127.0.0.1",
+		Port:     19840,
 	}
 
 	peeraddr := &payload.AddressInfo{
-		Time: tm,
-		Stream: 1,
+		Time:     tm,
+		Stream:   1,
 		Services: 1,
-		Ip: "127.0.0.1",
-		Port: 8444,
+		Ip:       "127.0.0.1",
+		Port:     8444,
 	}
 
 	vmsg := &payload.Version{
-		Services: 1,
+		Services:  1,
 		Timestamp: tm,
-		ToAddr: peeraddr,
-		FromAddr: myaddr,
+		ToAddr:    peeraddr,
+		FromAddr:  myaddr,
 		UserAgent: "Go bitmessage Daemon",
-		Streams: []int{1},
+		Streams:   []int{1},
 	}
 
 	m := msg.New(msg.Cversion, vmsg.Encode())
@@ -52,13 +51,13 @@ func main() {
 	}
 }
 
-type RecvHandler struct {}
+type RecvHandler struct{}
 
 func (h *RecvHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 	log.Printf("received unexpected connection of type %v", m.Cmd())
 }
 
-type SendHandler struct {}
+type SendHandler struct{}
 
 func (h *SendHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 	log.Printf("received msg from peer of type %v", m.Cmd())
@@ -75,4 +74,3 @@ func (h *SendHandler) Handle(w io.WriteCloser, m *msg.Msg) {
 
 	}
 }
-
