@@ -10,21 +10,11 @@ import (
 )
 
 const (
-	DefaultTimeout = 10 * time.Second
+	DefaultTimeout = 30 * time.Second
 )
 
 type Handler interface {
 	Handle(conn net.Conn)
-}
-
-func ReadMsg(conn net.Conn, cmd Command) (*msg.Msg, error) {
-	m, err := msg.Decode(conn)
-	if err != nil {
-		return nil, err
-	} else if m.Cmd() != cmd {
-		return nil, fmt.Errorf("p2p: decoded msg of wrong type (expected %v, got %v)", m.Cmd(), cmd)
-	}
-	return m, nil
 }
 
 // Send opens a stream with the peer at addr and sends encoded message m.

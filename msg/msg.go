@@ -32,6 +32,23 @@ const (
 
 var Order = binary.BigEndian
 
+func ReadKind(r io.Reader, cmd Command) (*Msg, error) {
+	m, err := Decode(r)
+	if err != nil {
+		return nil, err
+	} else if m.Cmd() != cmd {
+		return nil, fmt.Errorf("msg: decoded msg of wrong type (expected %v, got %v)", cmd, m.Cmd())
+	}
+	return m, nil
+}
+
+func Must(m *Msg, err error) *Msg {
+	if err != nil {
+		panic(err)
+	}
+	return m
+}
+
 type Msg struct {
 	magic   uint32
 	command Command

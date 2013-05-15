@@ -128,10 +128,10 @@ func InventoryDecode(data []byte) (inv [][]byte, err error) {
 
 	nObj, offset := varIntDecode(data)
 	objData := make([][]byte, nObj)
+	fmt.Printf("nobj=%v, len(data)-offset=%v, offset=%v\n", nObj, len(data) - offset, offset)
 	for i := 0; i < nObj; i++ {
-		start := offset + i*32
-		end := start + 32
-		objData[i] = data[start:end]
+		objData[i] = data[offset:offset + 32]
+		offset += 32
 	}
 	return objData, nil
 }

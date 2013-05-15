@@ -1,9 +1,9 @@
 package main
 
 import (
-	"io"
 	"log"
 	"time"
+	"net"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 	"github.com/rwcarlsen/gobitmsg/p2p"
@@ -38,39 +38,101 @@ func main() {
 		Streams:   []int{1},
 	}
 
-	m := msg.New(msg.Cversion, vmsg.Encode())
 
-	//node := p2p.NewNode("127.0.0.1:19840", &RecvHandler{})
-	//if err := node.Start(); err != nil {
-	//	log.Fatalf("node failed to start: %v", err)
-	//}
 
-	p := p2p.NewPeer("127.0.0.1:8444")
-	if err := p.Send(m, &SendHandler{}); err != nil {
-		log.Fatalf("message send failed: %v", err)
+	addrs, inv, err := VersionExchange("127.0.0.1:8444", vmsg, []*payload.AddressInfo{}, [][]byte{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, addr := range addrs {
+		log.Printf("received info on peer %v:%v", addr.Ip, addr.Port)
+	}
+
+	for _, hash := range inv {
+		log.Printf("received inventory hash %x", hash)
 	}
 }
 
-type RecvHandler struct{}
+func VersionExchange(addr string, v *payload.Version, ai []*payload.AddressInfo, inv [][]byte) (nai []*payload.AddressInfo, ninv [][]byte, err error) {
+	h := &VersionHandler {
+		CurrPeers: ai,
+		CurrInventory: inv,
+	}
 
-func (h *RecvHandler) Handle(w io.WriteCloser, m *msg.Msg) {
-	log.Printf("received unexpected connection of type %v", m.Cmd())
+	m := msg.New(msg.Cversion, v.Encode())
+	if err := p2p.Send(addr, m, h); err != nil {
+		return nil, nil, err
+	}
+
+	return h.CurrPeers, h.CurrInventory, nil
 }
 
-type SendHandler struct{}
-
-func (h *SendHandler) Handle(w io.WriteCloser, m *msg.Msg) {
-	log.Printf("received msg from peer of type %v", m.Cmd())
-	switch cmd := m.Cmd(); cmd {
-	case msg.Cverack:
-	case msg.Cversion:
-		w.Write(msg.New(msg.Cverack, []byte{}).Encode())
-	case msg.Caddr:
-	case msg.Cinv:
-		log.Print("communication complete")
-		w.Close()
-	default:
-		log.Printf("msg type %v from peer is unanticipated", cmd)
-
+func logRecover() {
+	if r := recover(); r != nil {
+		log.Print(r)
 	}
 }
+
+// handler for dealing with a sequence of sends/receives initiated by us
+// sending a version message to another peer.
+type VersionHandler struct {
+	NewPeers []*payload.AddressInfo
+	NewInventory [][]byte
+	CurrPeers []*payload.AddressInfo
+	CurrInventory [][]byte
+	Ver *payload.Version
+}
+
+func (h *VersionHandler) Handle(conn net.Conn) {
+	defer logRecover()
+	defer conn.Close()
+
+	// wait for verack
+	msg.Must(msg.ReadKind(conn, msg.Cverack))
+
+	// wait for version message and send verack
+	m := msg.Must(msg.ReadKind(conn, msg.Cversion))
+	h.recvVer(m)
+
+	conn.Write(msg.New(msg.Cverack, []byte{}).Encode())
+
+	// send addr and inv messages
+	am := msg.New(msg.Caddr, payload.AddrEncode(h.CurrPeers...))
+	conn.Write(am.Encode())
+
+	im := msg.New(msg.Cinv, payload.InventoryEncode(h.CurrInventory))
+	conn.Write(im.Encode())
+
+	// wait for addr and inv messages
+	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
+	h.recvPeers(m)
+
+	m = msg.Must(msg.ReadKind(conn, msg.Cinv))
+	h.recvInv(m)
+}
+
+func (h *VersionHandler) recvVer(m *msg.Msg) {
+	ver, err := payload.VersionDecode(m.Payload())
+	if err != nil {
+		panic(err)
+	}
+	h.Ver = ver
+}
+
+func (h *VersionHandler) recvPeers(m *msg.Msg) {
+	addrs, err := payload.AddrDecode(m.Payload())
+	if err != nil {
+		panic(err)
+	}
+	h.NewPeers = addrs
+}
+
+func (h *VersionHandler) recvInv(m *msg.Msg) {
+	hashes, err := payload.InventoryDecode(m.Payload())
+	if err != nil {
+		panic(err)
+	}
+	h.NewInventory = hashes
+}
+
