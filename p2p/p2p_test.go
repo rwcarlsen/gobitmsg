@@ -8,20 +8,6 @@ import (
 	"github.com/rwcarlsen/gobitmsg/msg"
 )
 
-type SendHandler struct {
-	Resp *msg.Msg
-}
-
-func (h *SendHandler) Handle(conn net.Conn) {
-	m, err := msg.Decode(conn)
-	if err != nil {
-		return
-	}
-
-	h.Resp = m
-	conn.Close()
-}
-
 type RecvHandler struct{}
 
 func (h *RecvHandler) Handle(conn net.Conn) {
@@ -39,10 +25,19 @@ func TestSendAndRespond(t *testing.T) {
 	}
 
 	m := msg.New(msg.Cversion, []byte("hello from node1"))
-	h := &SendHandler{}
-	if err := Send("127.0.0.1:22334", m, h); err != nil {
-		t.Errorf("send to peer node failed:", err)
-	} else if !bytes.Equal(m.Payload(), h.Resp.Payload()) {
-		t.Errorf("echo response failed: expected %s, got %s", m.Payload(), h.Resp.Payload())
+	conn, err := Dial("127.0.0.1:22334")
+	if err != nil {
+		t.Errorf("connection to peer node failed:", err)
+	}
+	defer conn.Close()
+
+	conn.Write(m.Encode())
+	resp, err := msg.Decode(conn)
+	if err != nil {
+		t.Errorf("response from peer node failed:", err)
+	}
+
+	if !bytes.Equal(m.Payload(), resp.Payload()) {
+		t.Errorf("echo response failed: expected %s, got %s", m.Payload(), resp.Payload())
 	}
 }

@@ -1,7 +1,6 @@
 package payload
 
 import (
-	"crypto/sha512"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -119,62 +118,42 @@ func AddrEncode(addresses ...*AddressInfo) []byte {
 }
 
 func InventoryDecode(data []byte) (inv [][]byte, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			inv = nil
-			err = fmt.Errorf("payload: failed to decode inv payload (malformed)")
-		}
-	}()
-
-	nObj, offset := varIntDecode(data)
-	objData := make([][]byte, nObj)
-	fmt.Printf("nobj=%v, len(data)-offset=%v, offset=%v\n", nObj, len(data) - offset, offset)
-	for i := 0; i < nObj; i++ {
-		objData[i] = data[offset:offset + 32]
-		offset += 32
-	}
-	return objData, nil
+	return byteListDecode(data)
 }
 
-func InventoryEncode(objData [][]byte) []byte {
-	h := sha512.New()
-	data := varIntEncode(len(objData))
-
-	for _, data := range objData {
-		h.Reset()
-		h.Write(data)
-		sum := h.Sum(nil)
-		h.Reset()
-		h.Write(sum)
-		sum = h.Sum(nil)
-		data = append(data, sum[:32]...)
-	}
-
-	return data
+func InventoryEncode(hashes [][]byte) []byte {
+	return byteListEncode(hashes)
 }
 
 func GetDataDecode(data []byte) (hashes [][]byte, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			hashes = nil
-			err = fmt.Errorf("payload: failed to decode getdata payload (malformed)")
-		}
-	}()
-
-	nHashes, offset := varIntDecode(data)
-	hashes = make([][]byte, nHashes)
-	for i := 0; i < nHashes; i++ {
-		start := offset + i*32
-		end := start + 32
-		hashes = append(hashes, data[start:end])
-	}
-	return hashes, nil
+	return byteListDecode(data)
 }
 
 func GetDataEncode(hashes [][]byte) []byte {
-	data := varIntEncode(len(hashes))
-	for _, sum := range hashes {
-		data = append(data, sum...)
+	return byteListEncode(hashes)
+}
+
+func byteListDecode(data []byte) (b [][]byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			b = nil
+			err = fmt.Errorf("payload: failed to decode [][]byte payload (malformed)")
+		}
+	}()
+
+	nItems, offset := varIntDecode(data)
+	b = make([][]byte, nItems)
+	for i := 0; i < nItems; i++ {
+		b[i] = data[offset:offset+32]
+		offset += 32
+	}
+	return b, nil
+}
+
+func byteListEncode(bl [][]byte) []byte {
+	data := varIntEncode(len(bl))
+	for _, b := range bl {
+		data = append(data, b...)
 	}
 	return data
 }

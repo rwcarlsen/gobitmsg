@@ -5,54 +5,36 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"github.com/rwcarlsen/gobitmsg/msg"
 )
 
 const (
 	DefaultTimeout = 30 * time.Second
 )
 
+// Dial opens a stream with the peer at addr.
+func Dial(addr string) (net.Conn, error) {
+	conn, err := net.DialTimeout("tcp", addr, DefaultTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
 type Handler interface {
 	Handle(conn net.Conn)
 }
 
-// Send opens a stream with the peer at addr and sends encoded message m.
-// Received responses and further back/forth communication will be passed
-// to the handler.  h is responsible for closing the connection when
-// finished.  Send blocks until h or the peer closes the connection.
-func Send(addr string, m *msg.Msg, h Handler) error {
-	conn, err := net.DialTimeout("tcp", addr, DefaultTimeout)
-	if err != nil {
-		return err
-	}
-
-	if _, err := conn.Write(m.Encode()); err != nil {
-		return err
-	}
-
-	for {
-		if _, err := conn.Read(make([]byte, 0)); err != nil && err != io.EOF {
-			// gracefully handle connections closed by handler
-			return nil
-		}
-		h.Handle(conn)
-	}
-	return nil
-}
-
 type Node struct {
-	Addr string
-	handler   Handler
+	Addr    string
+	handler Handler
 }
-
 
 // NewNode creates and returns a new p2p node that listens on network
 // address addr.  Incoming message streams from other nodes are passed to
 // h.  h is responsible for closing connections when finished.
 func NewNode(addr string, h Handler) *Node {
 	return &Node{
-		Addr: addr,
+		Addr:    addr,
 		handler: h,
 	}
 }
@@ -99,4 +81,3 @@ func (n *Node) handleConn(conn net.Conn) {
 		n.handler.Handle(conn)
 	}
 }
-
