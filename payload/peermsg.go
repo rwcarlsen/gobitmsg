@@ -118,7 +118,7 @@ func AddrEncode(addresses ...*AddressInfo) []byte {
 }
 
 func InventoryDecode(data []byte) (inv [][]byte, err error) {
-	return byteListDecode(data)
+	return byteListDecode("inv", data)
 }
 
 func InventoryEncode(hashes [][]byte) []byte {
@@ -126,23 +126,24 @@ func InventoryEncode(hashes [][]byte) []byte {
 }
 
 func GetDataDecode(data []byte) (hashes [][]byte, err error) {
-	return byteListDecode(data)
+	return byteListDecode("getdata", data)
 }
 
 func GetDataEncode(hashes [][]byte) []byte {
 	return byteListEncode(hashes)
 }
 
-func byteListDecode(data []byte) (b [][]byte, err error) {
+func byteListDecode(kind string, data []byte) (b [][]byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			b = nil
-			err = fmt.Errorf("payload: failed to decode [][]byte payload (malformed)")
+			err = fmt.Errorf("payload: failed to decode %v payload (malformed)", kind)
 		}
 	}()
 
 	nItems, offset := varIntDecode(data)
 	b = make([][]byte, nItems)
+	fmt.Printf("len(data)=%v, nItems=%v (actual %v)\n", len(data), nItems, float64(len(data) - offset) / 32)
 	for i := 0; i < nItems; i++ {
 		b[i] = data[offset:offset+32]
 		offset += 32

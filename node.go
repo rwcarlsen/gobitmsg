@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -41,16 +42,23 @@ func main() {
 
 	vr, err := VersionExchange("127.0.0.1:8444", vmsg, []*payload.AddressInfo{}, [][]byte{})
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
 	}
 
-	for _, addr := range vr.OtherPeers {
+	for _, addr := range vr.OtherPeers[:min(10, len(vr.OtherPeers))] {
 		log.Printf("received info on peer %v:%v", addr.Ip, addr.Port)
 	}
 
-	for _, hash := range vr.OtherInv {
+	for _, hash := range vr.OtherInv[:min(10, len(vr.OtherInv))] {
 		log.Printf("received inventory hash %x", hash)
 	}
+}
+
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
 }
 
 type VerResp struct {
@@ -60,7 +68,7 @@ type VerResp struct {
 }
 
 func VersionExchange(addr string, v *payload.Version, ai []*payload.AddressInfo, inv [][]byte) (vr *VerResp, err error) {
-	defer logRecover()
+	defer recoverErr(&err)
 
 	conn, err := p2p.Dial(addr)
 	if err != nil {
@@ -108,9 +116,10 @@ func VersionExchange(addr string, v *payload.Version, ai []*payload.AddressInfo,
 	return vr, nil
 }
 
-func logRecover() {
+func recoverErr(err *error) {
 	if r := recover(); r != nil {
-		log.Print(r)
+		rerr := fmt.Errorf("version exchange failed (%v)", r)
+		*err = rerr
 	}
 }
 
