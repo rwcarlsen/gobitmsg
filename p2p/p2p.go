@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultTimeout = 30 * time.Second
+	DefaultTimeout = 7 * time.Second
 )
 
 // Dial opens a stream with the peer at addr.

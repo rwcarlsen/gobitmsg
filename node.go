@@ -17,15 +17,16 @@ func main() {
 		Time:     tm,
 		Stream:   1,
 		Services: 1,
-		Ip:       "127.0.0.1",
+		Ip:       "68.119.167.210",
 		Port:     19840,
 	}
 
+	peer := "85.5.66.52:8444"
 	peeraddr := &payload.AddressInfo{
 		Time:     tm,
 		Stream:   1,
 		Services: 1,
-		Ip:       "127.0.0.1",
+		Ip:       "85.5.66.52",
 		Port:     8444,
 	}
 
@@ -40,9 +41,12 @@ func main() {
 
 
 
-	vr, err := VersionExchange("127.0.0.1:8444", vmsg, []*payload.AddressInfo{}, [][]byte{})
+	vr, err := VersionExchange(peer, vmsg, []*payload.AddressInfo{}, [][]byte{})
 	if err != nil {
 		log.Print(err)
+		if vr == nil {
+			log.Fatal()
+		}
 	}
 
 	for _, addr := range vr.OtherPeers[:min(10, len(vr.OtherPeers))] {
