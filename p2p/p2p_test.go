@@ -63,7 +63,7 @@ func TestVersionExchange(t *testing.T) {
 		<- node1.Ver
 	}()
 
-	err = node1.VersionExchange(node2.MyVer.FromAddr)
+	err := node1.VersionExchange(node2.MyVer.FromAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
