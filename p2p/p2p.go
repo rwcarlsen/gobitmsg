@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"time"
+	"os"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 	"github.com/rwcarlsen/gobitmsg/payload"
@@ -13,6 +14,33 @@ import (
 const (
 	defaultTimeout = 7 * time.Second
 )
+
+func NewNode(name string, ip string, port int) *Node {
+	addr := &payload.AddressInfo{
+		Time:     time.Now(),
+		Stream:   1,
+		Services: 1,
+		Ip:       ip,
+		Port:     port,
+	}
+	ver := &payload.Version{
+		Services:  1,
+		Timestamp: time.Now(),
+		ToAddr:    addr,
+		FromAddr:  addr,
+		UserAgent: "Go bitmessage Daemon",
+		Streams:   []int{1},
+	}
+	return &Node{
+		Addr: addr.Addr(),
+		Log: log.New(os.Stdout, name + ": ", log.LstdFlags),
+		Objects: make(chan *msg.Msg),
+		Ver: make(chan *VerResp),
+		MyVer: ver,
+		MyAddrList: []*payload.AddressInfo{},
+		MyInvList: [][]byte{},
+	}
+}
 
 // dial opens a stream with the peer at addr.
 func dial(addr string) (net.Conn, error) {
@@ -148,6 +176,7 @@ func (n *Node) VersionExchange(addr *payload.AddressInfo) (err error) {
 		}
 	}()
 
+	n.Log.Printf("Dialing address %v", addr.Addr())
 	conn, err := dial(addr.Addr())
 	if err != nil {
 		return err
