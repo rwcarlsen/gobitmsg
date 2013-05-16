@@ -17,16 +17,19 @@ func main() {
 		Time:     tm,
 		Stream:   1,
 		Services: 1,
-		Ip:       "66.65.120.151",
-		Port:     8080,
+		Ip:       "163.118.75.118",
+		Port:     8444,
 	}
+
+	var vr *p2p.VerResp
+	go func() {
+		vr = <- node.Ver
+	}()
 
 	err := node.VersionExchange(peeraddr)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	vr := <- node.Ver
 
 	for _, addr := range vr.OtherPeers[:min(10, len(vr.OtherPeers))] {
 		log.Printf("received info on peer %v:%v", addr.Ip, addr.Port)
