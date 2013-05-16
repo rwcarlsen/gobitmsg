@@ -167,6 +167,11 @@ type AddressInfo struct {
 	Port     int
 }
 
+func (ai *AddressInfo) Addr() string {
+	p := strconv.Itoa(ai.Port)
+	return fmt.Sprintf("%v:%v", ai.Ip, p)
+}
+
 // addressInfoDecode decodes an address info structure from data and
 // returns the it along with the total number of bytes decoded from data.
 // Bytes after the decoded struct are ignored.
@@ -185,10 +190,11 @@ func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 // Bytes after the decoded struct are ignored.
 func addressInfoDecodeShort(data []byte) (v *AddressInfo, n int) {
 	return &AddressInfo{
-		Services: order.Uint64(data[:8]),
-		Ip:       unpackIp(data[8:24]),
-		Port:     int(order.Uint16(data[24:26])),
-	}, 26
+		Stream: int(order.Uint32(data[:4])),
+		Services: order.Uint64(data[4:12]),
+		Ip:       unpackIp(data[12:28]),
+		Port:     int(order.Uint16(data[28:30])),
+	}, 30
 }
 
 func (ai *AddressInfo) encode() []byte {
@@ -204,7 +210,7 @@ func (ai *AddressInfo) encode() []byte {
 }
 
 func (ai *AddressInfo) encodeShort() []byte {
-	return ai.encode()[12:]
+	return ai.encode()[8:]
 }
 
 func packIp(data []byte, ip string) {

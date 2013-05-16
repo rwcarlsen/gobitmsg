@@ -20,7 +20,6 @@ type Command string
 const (
 	Cversion   Command = "version"
 	Cverack            = "verack"
-	Cgetaddr           = "getaddr"
 	Caddr              = "addr"
 	Cinv               = "inv"
 	Cgetdata           = "getdata"
