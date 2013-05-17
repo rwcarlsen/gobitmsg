@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 	"os"
+	"time"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
 	"github.com/rwcarlsen/gobitmsg/payload"
@@ -32,13 +32,13 @@ func NewNode(name string, ip string, port int) *Node {
 		Streams:   []int{1},
 	}
 	return &Node{
-		Addr: addr.Addr(),
-		Log: log.New(os.Stdout, name + ": ", log.LstdFlags),
-		Objects: make(chan *msg.Msg),
-		Ver: make(chan *VerResp),
-		MyVer: ver,
+		Addr:       addr.Addr(),
+		Log:        log.New(os.Stdout, name+": ", log.LstdFlags),
+		Objects:    make(chan *msg.Msg),
+		Ver:        make(chan *VerResp),
+		MyVer:      ver,
 		MyAddrList: []*payload.AddressInfo{},
-		MyInvList: [][]byte{},
+		MyInvList:  [][]byte{},
 	}
 }
 

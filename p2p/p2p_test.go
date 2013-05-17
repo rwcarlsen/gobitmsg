@@ -29,7 +29,7 @@ func TestVersionExchange(t *testing.T) {
 	}
 
 	go func() {
-		<- node1.Ver
+		<-node1.Ver
 	}()
 
 	err := node1.VersionExchange(node2.MyVer.FromAddr)

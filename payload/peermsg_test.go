@@ -44,4 +44,3 @@ func TestAddressInfo(t *testing.T) {
 	data = addr.encodeShort()
 	addressInfoDecodeShort(data)
 }
-

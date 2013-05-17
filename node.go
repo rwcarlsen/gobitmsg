@@ -23,7 +23,7 @@ func main() {
 
 	var vr *p2p.VerResp
 	go func() {
-		vr = <- node.Ver
+		vr = <-node.Ver
 	}()
 
 	err := node.VersionExchange(peeraddr)

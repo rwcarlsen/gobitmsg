@@ -143,9 +143,9 @@ func byteListDecode(kind string, data []byte) (b [][]byte, err error) {
 
 	nItems, offset := varIntDecode(data)
 	b = make([][]byte, nItems)
-	fmt.Printf("len(data)=%v, nItems=%v (actual %v)\n", len(data), nItems, float64(len(data) - offset) / 32)
+	fmt.Printf("len(data)=%v, nItems=%v (actual %v)\n", len(data), nItems, float64(len(data)-offset)/32)
 	for i := 0; i < nItems; i++ {
-		b[i] = data[offset:offset+32]
+		b[i] = data[offset : offset+32]
 		offset += 32
 	}
 	return b, nil
