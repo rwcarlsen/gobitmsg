@@ -14,19 +14,11 @@ const (
 	defaultTimeout = 7 * time.Second
 )
 
-// dial opens a stream with the peer at addr.
-func dial(addr string) (net.Conn, error) {
-	conn, err := net.DialTimeout("tcp", addr, defaultTimeout)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-
 type VerDat struct {
 	Ver   *payload.Version
 	Peers []*payload.AddressInfo
 	Inv   [][]byte
+	Err   error
 }
 
 type Node struct {
@@ -127,14 +119,15 @@ func (n *Node) handleConn(conn net.Conn) {
 }
 
 func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
+	resp := &VerDat{}
 	defer func() {
 		if r := recover(); r != nil {
-			n.Log.Printf("[ERR] version sequence did not complete (%v)", r)
+			resp.Err = fmt.Errorf("[ERR] version sequence did not complete (%v)", r)
+			n.Log.Print(resp.Err)
 		}
 	}()
 
 	var err error
-	resp := &VerDat{}
 	n.Log.Printf("[INFO] version sequence with %v", conn.RemoteAddr())
 
 	resp.Ver, err = payload.VersionDecode(m.Payload())
@@ -188,21 +181,21 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 // versionExchanges initiates and performs a version exchange sequence with
 // the node at addr.
 func (n *Node) versionExchange() {
+	req := <-n.verOut
+	resp := &VerDat{}
 	defer func() {
 		if r := recover(); r != nil {
-			n.Log.Printf("[ERR] version exchange did not complete (%v)", r)
+			resp.Err = fmt.Errorf("[ERR] version exchange did not complete (%v)", r)
+			n.Log.Print(resp.Err)
 		}
 	}()
-	req := <-n.verOut
 
 	n.Log.Printf("[INFO] version exchange with %v", req.Ver.ToAddr.Addr())
-	conn, err := dial(req.Ver.ToAddr.Addr())
+	conn, err := net.DialTimeout("tcp", req.Ver.ToAddr.Addr(), defaultTimeout)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
-
-	resp := &VerDat{}
 
 	// send version msg and wait for verack
 	m := msg.New(msg.Cversion, req.Ver.Encode())
@@ -255,7 +248,7 @@ func (n *Node) VersionExchange(addr *payload.AddressInfo) {
 	vcopy := *n.MyVer
 	vcopy.Timestamp = time.Now()
 	vcopy.ToAddr = addr
-	n.verOut <- &VerDat{&vcopy, n.MyPeers, n.MyInv}
+	n.verOut <- &VerDat{&vcopy, n.MyPeers, n.MyInv, nil}
 }
 
 func (n *Node) Broadcast(m *msg.Msg) {
@@ -274,7 +267,7 @@ func (n *Node) respondGetData(m *msg.Msg, conn net.Conn) {
 }
 
 func (nd *Node) GetData(addr string, hashes [][]byte) (n int, err error) {
-	conn, err := dial(addr)
+	conn, err := net.DialTimeout("tcp", addr, defaultTimeout)
 	if err != nil {
 		return n, err
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	lg := log.New(os.Stdout, "", log.LstdFlags)
+	lg := log.New(os.Stdout, "NODE ", log.LstdFlags)
 	node := p2p.NewNode("127.0.0.1", 19840, lg)
 	if err := node.Start(); err != nil {
 		log.Fatal(err)
