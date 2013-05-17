@@ -35,6 +35,7 @@ func VersionDecode(data []byte) (v *Version, err error) {
 	}()
 
 	v = &Version{}
+	var n int
 
 	v.protocol = order.Uint32(data[:4])
 	offset := 4
@@ -46,7 +47,6 @@ func VersionDecode(data []byte) (v *Version, err error) {
 	v.Timestamp = time.Unix(sec, 0)
 	offset += 8
 
-	var n int
 	v.ToAddr, n = addressInfoDecodeShort(data[offset:])
 	offset += n
 
@@ -177,12 +177,12 @@ func (ai *AddressInfo) Addr() string {
 // Bytes after the decoded struct are ignored.
 func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 	return &AddressInfo{
-		Time:     time.Unix(int64(order.Uint64(data[:8])), 0),
-		Stream:   int(order.Uint32(data[8:12])),
-		Services: order.Uint64(data[12:20]),
-		Ip:       unpackIp(data[20:36]),
-		Port:     int(order.Uint16(data[36:38])),
-	}, 38
+		Time:     time.Unix(int64(order.Uint32(data[:4])), 0),
+		Stream:   int(order.Uint32(data[4:8])),
+		Services: order.Uint64(data[8:16]),
+		Ip:       unpackIp(data[16:32]),
+		Port:     int(order.Uint16(data[32:34])),
+	}, 34
 }
 
 // addressInfoDecodeShort decodes an address info structure from data and
@@ -190,6 +190,7 @@ func addressInfoDecode(data []byte) (v *AddressInfo, n int) {
 // Bytes after the decoded struct are ignored.
 func addressInfoDecodeShort(data []byte) (v *AddressInfo, n int) {
 	return &AddressInfo{
+		//Stream:   int(order.Uint32(data[:4])),
 		Services: order.Uint64(data[:8]),
 		Ip:       unpackIp(data[8:24]),
 		Port:     int(order.Uint16(data[24:26])),
@@ -197,19 +198,19 @@ func addressInfoDecodeShort(data []byte) (v *AddressInfo, n int) {
 }
 
 func (ai *AddressInfo) encode() []byte {
-	data := make([]byte, 38)
+	data := make([]byte, 34)
 
-	order.PutUint64(data[:8], uint64(ai.Time.Unix()))
-	order.PutUint32(data[8:12], uint32(ai.Stream))
-	order.PutUint64(data[12:20], ai.Services)
-	packIp(data[20:36], ai.Ip)
-	order.PutUint16(data[36:38], uint16(ai.Port))
+	order.PutUint32(data[:4], uint32(ai.Time.Unix()))
+	order.PutUint32(data[4:8], uint32(ai.Stream))
+	order.PutUint64(data[8:16], ai.Services)
+	packIp(data[16:32], ai.Ip)
+	order.PutUint16(data[32:34], uint16(ai.Port))
 
 	return data
 }
 
 func (ai *AddressInfo) encodeShort() []byte {
-	return ai.encode()[12:]
+	return ai.encode()[8:]
 }
 
 func packIp(data []byte, ip string) {

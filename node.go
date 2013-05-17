@@ -17,7 +17,7 @@ func main() {
 		Time:     tm,
 		Stream:   1,
 		Services: 1,
-		Ip:       "163.118.75.118",
+		Ip:       "127.0.0.1",
 		Port:     8444,
 	}
 
@@ -28,11 +28,16 @@ func main() {
 
 	err := node.VersionExchange(peeraddr)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		if vr == nil {
+			return
+		}
 	}
 
+	log.Printf("Other Version: %+v", *vr.OtherVer)
+
 	for _, addr := range vr.OtherPeers[:min(10, len(vr.OtherPeers))] {
-		log.Printf("received info on peer %v:%v", addr.Ip, addr.Port)
+		log.Printf("received info on peer %+v", *addr)
 	}
 
 	for _, hash := range vr.OtherInv[:min(10, len(vr.OtherInv))] {
