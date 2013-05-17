@@ -83,13 +83,15 @@ func (n *Node) Start() error {
 
 	go func() {
 		for {
-			n.versionExchange()
+			req := <-n.verOut
+			n.versionExchange(req)
 		}
 	}()
 
 	go func() {
 		for {
-			n.broadcastObj()
+			m := <-n.objectsOut
+			n.broadcastObj(m)
 		}
 	}()
 
@@ -180,8 +182,7 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 
 // versionExchanges initiates and performs a version exchange sequence with
 // the node at addr.
-func (n *Node) versionExchange() {
-	req := <-n.verOut
+func (n *Node) versionExchange(req *VerDat) {
 	resp := &VerDat{}
 	defer func() {
 		if r := recover(); r != nil {
@@ -255,8 +256,7 @@ func (n *Node) Broadcast(m *msg.Msg) {
 	n.objectsOut <- m
 }
 
-func (n *Node) broadcastObj() {
-	m := <-n.objectsOut
+func (n *Node) broadcastObj(m *msg.Msg) {
 	_ = m
 
 	panic("not implemented")
