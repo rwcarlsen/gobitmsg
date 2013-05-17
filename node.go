@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/rwcarlsen/gobitmsg/p2p"
@@ -9,7 +10,8 @@ import (
 )
 
 func main() {
-	node := p2p.NewNode("mynode", "127.0.0.1", 19840)
+	lg := log.New(os.Stdout, "", log.LstdFlags)
+	node := p2p.NewNode("127.0.0.1", 19840, lg)
 	if err := node.Start(); err != nil {
 		log.Fatal(err)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
@@ -14,35 +13,6 @@ import (
 const (
 	defaultTimeout = 7 * time.Second
 )
-
-func NewNode(name string, ip string, port int) *Node {
-	addr := &payload.AddressInfo{
-		Time:     time.Now(),
-		Stream:   1,
-		Services: 1,
-		Ip:       ip,
-		Port:     port,
-	}
-	ver := &payload.Version{
-		Services:  1,
-		Timestamp: time.Now(),
-		ToAddr:    addr,
-		FromAddr:  addr,
-		UserAgent: "Go bitmessage Daemon",
-		Streams:   []int{1},
-	}
-	return &Node{
-		Addr:       addr.Addr(),
-		Log:        log.New(os.Stdout, name+": ", log.LstdFlags),
-		ObjectsIn:  make(chan *msg.Msg),
-		objectsOut: make(chan *msg.Msg),
-		VerIn:      make(chan *VerDat),
-		verOut:     make(chan *VerDat),
-		MyVer:      ver,
-		MyPeers:    []*payload.AddressInfo{},
-		MyInv:      [][]byte{},
-	}
-}
 
 // dial opens a stream with the peer at addr.
 func dial(addr string) (net.Conn, error) {
@@ -69,6 +39,35 @@ type Node struct {
 	MyVer      *payload.Version
 	MyPeers    []*payload.AddressInfo
 	MyInv      [][]byte
+}
+
+func NewNode(ip string, port int, lg *log.Logger) *Node {
+	addr := &payload.AddressInfo{
+		Time:     time.Now(),
+		Stream:   1,
+		Services: 1,
+		Ip:       ip,
+		Port:     port,
+	}
+	ver := &payload.Version{
+		Services:  1,
+		Timestamp: time.Now(),
+		ToAddr:    addr,
+		FromAddr:  addr,
+		UserAgent: "/gobitmsg-0.1/",
+		Streams:   []int{1},
+	}
+	return &Node{
+		Addr:       addr.Addr(),
+		Log:        lg,
+		ObjectsIn:  make(chan *msg.Msg),
+		objectsOut: make(chan *msg.Msg),
+		VerIn:      make(chan *VerDat),
+		verOut:     make(chan *VerDat),
+		MyVer:      ver,
+		MyPeers:    []*payload.AddressInfo{},
+		MyInv:      [][]byte{},
+	}
 }
 
 // Start sets the node to begin listening for and serving messages
@@ -130,12 +129,13 @@ func (n *Node) handleConn(conn net.Conn) {
 func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
-			n.Log.Printf("version sequence failed (%v)", r)
+			n.Log.Printf("[ERR] version sequence did not complete (%v)", r)
 		}
 	}()
 
 	var err error
 	resp := &VerDat{}
+	n.Log.Printf("[INFO] version sequence with %v", conn.RemoteAddr())
 
 	resp.Ver, err = payload.VersionDecode(m.Payload())
 	if err != nil {
@@ -182,6 +182,7 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	if err != nil {
 		panic(err)
 	}
+	n.Log.Printf("[INFO] version sequence with %v successful", conn.RemoteAddr())
 }
 
 // versionExchanges initiates and performs a version exchange sequence with
@@ -189,13 +190,12 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 func (n *Node) versionExchange() {
 	defer func() {
 		if r := recover(); r != nil {
-			n.Log.Printf("version exchange failed (%v)", r)
+			n.Log.Printf("[ERR] version exchange did not complete (%v)", r)
 		}
 	}()
-
 	req := <-n.verOut
 
-	n.Log.Printf("Dialing address %v", req.Ver.ToAddr.Addr())
+	n.Log.Printf("[INFO] version exchange with %v", req.Ver.ToAddr.Addr())
 	conn, err := dial(req.Ver.ToAddr.Addr())
 	if err != nil {
 		panic(err)
@@ -247,6 +247,8 @@ func (n *Node) versionExchange() {
 	if err != nil {
 		panic(err)
 	}
+
+	n.Log.Printf("[INFO] version exchange with %v successful", req.Ver.ToAddr.Addr())
 }
 
 func (n *Node) VersionExchange(addr *payload.AddressInfo) {

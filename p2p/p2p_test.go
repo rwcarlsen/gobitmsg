@@ -1,7 +1,9 @@
 package p2p
 
 import (
+	"log"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/rwcarlsen/gobitmsg/msg"
@@ -18,12 +20,14 @@ func (h *RecvHandler) Handle(conn net.Conn) {
 }
 
 func TestVersionExchange(t *testing.T) {
-	node1 := NewNode("node1", "127.0.0.1", 22334)
+	lg1 := log.New(os.Stdout, "node1: ", log.LstdFlags)
+	node1 := NewNode("127.0.0.1", 22334, lg1)
 	if err := node1.Start(); err != nil {
 		t.Fatalf("node1 failed to start: %v", err)
 	}
 
-	node2 := NewNode("node2", "127.0.0.1", 22335)
+	lg2 := log.New(os.Stdout, "node2: ", log.LstdFlags)
+	node2 := NewNode("127.0.0.1", 22335, lg2)
 	if err := node2.Start(); err != nil {
 		t.Fatalf("node2 failed to start: %v", err)
 	}
