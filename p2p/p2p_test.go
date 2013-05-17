@@ -28,12 +28,11 @@ func TestVersionExchange(t *testing.T) {
 		t.Fatalf("node2 failed to start: %v", err)
 	}
 
-	go func() {
-		<-node1.Ver
-	}()
+	ver := *node1.MyVer
+	ver.ToAddr = node2.MyVer.FromAddr
 
-	err := node1.VersionExchange(node2.MyVer.FromAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	node1.VersionExchange(node2.MyVer.FromAddr)
+	resp := <-node1.VerIn
+
+	t.Logf("response version: %+v", resp.Ver)
 }

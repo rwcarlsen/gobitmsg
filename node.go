@@ -9,38 +9,29 @@ import (
 )
 
 func main() {
-	tm := time.Now()
-
 	node := p2p.NewNode("mynode", "127.0.0.1", 19840)
+	if err := node.Start(); err != nil {
+		log.Fatal(err)
+	}
 
 	peeraddr := &payload.AddressInfo{
-		Time:     tm,
+		Time:     time.Now(),
 		Stream:   1,
 		Services: 1,
 		Ip:       "127.0.0.1",
 		Port:     8444,
 	}
 
-	var vr *p2p.VerResp
-	go func() {
-		vr = <-node.Ver
-	}()
+	node.VersionExchange(peeraddr)
+	resp := <-node.VerIn
 
-	err := node.VersionExchange(peeraddr)
-	if err != nil {
-		log.Print(err)
-		if vr == nil {
-			return
-		}
-	}
+	log.Printf("Other Version: %+v", *resp.Ver)
 
-	log.Printf("Other Version: %+v", *vr.OtherVer)
-
-	for _, addr := range vr.OtherPeers[:min(10, len(vr.OtherPeers))] {
+	for _, addr := range resp.Peers[:min(10, len(resp.Peers))] {
 		log.Printf("received info on peer %+v", *addr)
 	}
 
-	for _, hash := range vr.OtherInv[:min(10, len(vr.OtherInv))] {
+	for _, hash := range resp.Inv[:min(10, len(resp.Inv))] {
 		log.Printf("received inventory hash %x", hash)
 	}
 }
