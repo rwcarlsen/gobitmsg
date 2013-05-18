@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 const (
 	defaultTimeout = 7 * time.Second
+	fanout         = 10 // number of peers to broadcast to
 )
 
 type VerDat struct {
@@ -30,7 +33,16 @@ type Node struct {
 	verOut     chan *VerDat
 	MyVer      *payload.Version
 	MyPeers    []*payload.AddressInfo
-	MyInv      [][]byte
+	MyInv      map[string][]byte
+}
+
+func (n *Node) invList() [][]byte {
+	hashes := make([][]byte, 0, len(n.MyInv))
+	for s, _ := range n.MyInv {
+		sum, _ := hex.DecodeString(s)
+		hashes = append(hashes, sum)
+	}
+	return hashes
 }
 
 func NewNode(ip string, port int, lg *log.Logger) *Node {
@@ -58,7 +70,7 @@ func NewNode(ip string, port int, lg *log.Logger) *Node {
 		verOut:     make(chan *VerDat),
 		MyVer:      ver,
 		MyPeers:    []*payload.AddressInfo{},
-		MyInv:      [][]byte{},
+		MyInv:      map[string][]byte{},
 	}
 }
 
@@ -104,6 +116,8 @@ func (n *Node) handleConn(conn net.Conn) {
 			n.Log.Print(r)
 		}
 	}()
+
+	defer conn.Close()
 
 	m := msg.Must(msg.Decode(conn))
 	n.Log.Printf("Received msg type %v", m.Cmd())
@@ -168,7 +182,7 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 		panic(err)
 	}
 
-	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.MyInv)
+	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.invList())
 	if err != nil {
 		panic(err)
 	}
@@ -190,6 +204,13 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 		panic(err)
 	}
 	n.Log.Printf("[INFO] version sequence with %v successful", conn.RemoteAddr())
+}
+
+func (n *Node) VersionExchange(addr *payload.AddressInfo) {
+	vcopy := *n.MyVer
+	vcopy.Timestamp = time.Now()
+	vcopy.ToAddr = addr
+	n.verOut <- &VerDat{&vcopy, n.MyPeers, n.invList(), nil}
 }
 
 // versionExchanges initiates and performs a version exchange sequence with
@@ -244,7 +265,7 @@ func (n *Node) versionExchange(req *VerDat) {
 		panic(err)
 	}
 
-	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.MyInv)
+	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.invList())
 	if err != nil {
 		panic(err)
 	}
@@ -269,13 +290,6 @@ func (n *Node) versionExchange(req *VerDat) {
 	n.Log.Printf("[INFO] version exchange with %v successful", req.Ver.ToAddr.Addr())
 }
 
-func (n *Node) VersionExchange(addr *payload.AddressInfo) {
-	vcopy := *n.MyVer
-	vcopy.Timestamp = time.Now()
-	vcopy.ToAddr = addr
-	n.verOut <- &VerDat{&vcopy, n.MyPeers, n.MyInv, nil}
-}
-
 func (n *Node) Broadcast(m *msg.Msg) {
 	n.objectsOut <- m
 }
@@ -283,13 +297,51 @@ func (n *Node) Broadcast(m *msg.Msg) {
 func (n *Node) broadcastObj(m *msg.Msg) {
 	_ = m
 
+	indices := rand.Perm(len(n.MyPeers))
+
+	success := 0
+	for _, ind := range indices {
+		peer := n.MyPeers[ind]
+		conn, err := net.DialTimeout("tcp", peer.Addr(), defaultTimeout)
+		if err != nil {
+			continue
+		}
+		if _, err := conn.Write(m.Encode()); err != nil {
+			continue
+		}
+		conn.Close()
+		if success++; success == fanout {
+			break
+		}
+	}
+
 	panic("not implemented")
 }
 
 func (n *Node) respondGetData(m *msg.Msg, conn net.Conn) {
-	panic("not implemented")
+	hashes, err := payload.GetDataDecode(payload.ProtocolVersion, m.Payload())
+	if err != nil {
+		n.Log.Printf("[ERR] failed to decode getdata payload from %v (%v)", conn.RemoteAddr(), err)
+		return
+	}
+
+	for _, sum := range hashes {
+		s := fmt.Sprint("%x", sum)
+		if data, ok := n.MyInv[s]; ok {
+			if _, err := conn.Write(data); err != nil {
+				n.Log.Printf("[ERR] failed to send all requested objects to %v (%v)", conn.RemoteAddr(), err)
+				break
+			}
+		} else {
+			n.Log.Printf("[ERR] %v requested object we don't have", conn.RemoteAddr())
+		}
+	}
+	n.Log.Printf("[INFO] sent %v requested objects to %v", len(hashes), conn.RemoteAddr())
 }
 
+// GetData retrieves requests objects with the specified hashes from the
+// peer node that sent us ver.  It returns the number of objects
+// successfully received and an error if n < len(hashes).
 func (nd *Node) GetData(ver *payload.Version, hashes [][]byte) (n int, err error) {
 	conn, err := net.DialTimeout("tcp", ver.FromAddr.Addr(), defaultTimeout)
 	if err != nil {
