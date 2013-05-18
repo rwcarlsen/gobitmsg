@@ -2,6 +2,9 @@ package payload
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
 func packUint(order binary.ByteOrder, v interface{}) (data []byte) {
@@ -101,6 +104,60 @@ func intListDecode(data []byte) (v []int, n int) {
 		vals[i] = val
 	}
 	return vals, offset
+}
+
+func byteListDecode(kind string, data []byte) (b [][]byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			b = nil
+			err = fmt.Errorf("payload: failed to decode %v payload (malformed)", kind)
+		}
+	}()
+
+	nItems, offset := varIntDecode(data)
+	b = make([][]byte, nItems)
+	for i := 0; i < nItems; i++ {
+		b[i] = data[offset : offset+32]
+		offset += 32
+	}
+	return b, nil
+}
+
+func byteListEncode(bl [][]byte) []byte {
+	data := varIntEncode(len(bl))
+	for _, b := range bl {
+		data = append(data, b...)
+	}
+	return data
+}
+
+func packIp(data []byte, ip string) {
+	points := strings.Split(ip, ".")
+	if l := len(points); l != 4 {
+		panic("Invalid/unsupported Ip: " + ip)
+	}
+
+	for i := range data[:12] {
+		data[i] = 0
+	}
+
+	data[10] = 0xFF
+	data[11] = 0xFF
+
+	for i, p := range points {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			panic("Invalid Ip: " + ip)
+		}
+		data[i+12] = byte(v)
+	}
+}
+
+func unpackIp(data []byte) string {
+	if data[10] != 0xFF || data[11] != 0xFF {
+		panic(fmt.Sprintf("Invalid/unsupported Ip: %x", data[:16]))
+	}
+	return fmt.Sprintf("%d.%d.%d.%d", data[12], data[13], data[14], data[15])
 }
 
 // Message encodings

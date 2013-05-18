@@ -147,7 +147,11 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	vcopy := *n.MyVer
 	vcopy.Timestamp = time.Now()
 	vcopy.ToAddr = resp.Ver.FromAddr
-	m = msg.New(msg.Cversion, vcopy.Encode())
+	pay, err := vcopy.Encode(resp.Ver.Protocol())
+	if err != nil {
+		panic(err)
+	}
+	m = msg.New(msg.Cversion, pay)
 	if _, err := conn.Write(m.Encode()); err != nil {
 		panic(err)
 	}
@@ -155,25 +159,33 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	msg.Must(msg.ReadKind(conn, msg.Cverack))
 
 	// send addr and inv messages
-	am := msg.New(msg.Caddr, payload.AddrEncode(n.MyPeers...))
+	pay, err = payload.AddrEncode(resp.Ver.Protocol(), n.MyPeers...)
+	if err != nil {
+		panic(err)
+	}
+	am := msg.New(msg.Caddr, pay)
 	if _, err := conn.Write(am.Encode()); err != nil {
 		panic(err)
 	}
 
-	im := msg.New(msg.Cinv, payload.InventoryEncode(n.MyInv))
+	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.MyInv)
+	if err != nil {
+		panic(err)
+	}
+	im := msg.New(msg.Cinv, pay)
 	if _, err := conn.Write(im.Encode()); err != nil {
 		panic(err)
 	}
 
 	// wait for addr and inv messages
 	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
-	resp.Peers, err = payload.AddrDecode(m.Payload())
+	resp.Peers, err = payload.AddrDecode(resp.Ver.Protocol(), m.Payload())
 	if err != nil {
 		panic(err)
 	}
 
 	m = msg.Must(msg.ReadKind(conn, msg.Cinv))
-	resp.Inv, err = payload.InventoryDecode(m.Payload())
+	resp.Inv, err = payload.InventoryDecode(resp.Ver.Protocol(), m.Payload())
 	if err != nil {
 		panic(err)
 	}
@@ -199,7 +211,11 @@ func (n *Node) versionExchange(req *VerDat) {
 	defer conn.Close()
 
 	// send version msg and wait for verack
-	m := msg.New(msg.Cversion, req.Ver.Encode())
+	pay, err := req.Ver.Encode(payload.ProtocolVersion)
+	if err != nil {
+		panic(err)
+	}
+	m := msg.New(msg.Cversion, pay)
 	if _, err := conn.Write(m.Encode()); err != nil {
 		panic(err)
 	}
@@ -219,25 +235,33 @@ func (n *Node) versionExchange(req *VerDat) {
 	}
 
 	// send addr and inv messages
-	am := msg.New(msg.Caddr, payload.AddrEncode(req.Peers...))
+	pay, err = payload.AddrEncode(resp.Ver.Protocol(), n.MyPeers...)
+	if err != nil {
+		panic(err)
+	}
+	am := msg.New(msg.Caddr, pay)
 	if _, err := conn.Write(am.Encode()); err != nil {
 		panic(err)
 	}
 
-	im := msg.New(msg.Cinv, payload.InventoryEncode(req.Inv))
+	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.MyInv)
+	if err != nil {
+		panic(err)
+	}
+	im := msg.New(msg.Cinv, pay)
 	if _, err := conn.Write(im.Encode()); err != nil {
 		panic(err)
 	}
 
 	// wait for addr and inv messages
 	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
-	resp.Peers, err = payload.AddrDecode(m.Payload())
+	resp.Peers, err = payload.AddrDecode(resp.Ver.Protocol(), m.Payload())
 	if err != nil {
 		panic(err)
 	}
 
 	m = msg.Must(msg.ReadKind(conn, msg.Cinv))
-	resp.Inv, err = payload.InventoryDecode(m.Payload())
+	resp.Inv, err = payload.InventoryDecode(resp.Ver.Protocol(), m.Payload())
 	if err != nil {
 		panic(err)
 	}
@@ -266,14 +290,17 @@ func (n *Node) respondGetData(m *msg.Msg, conn net.Conn) {
 	panic("not implemented")
 }
 
-func (nd *Node) GetData(addr string, hashes [][]byte) (n int, err error) {
-	conn, err := net.DialTimeout("tcp", addr, defaultTimeout)
+func (nd *Node) GetData(ver *payload.Version, hashes [][]byte) (n int, err error) {
+	conn, err := net.DialTimeout("tcp", ver.FromAddr.Addr(), defaultTimeout)
 	if err != nil {
 		return n, err
 	}
 	defer conn.Close()
-
-	m := msg.New(msg.Cgetdata, payload.GetDataEncode(hashes))
+	pay, err := payload.GetDataEncode(ver.Protocol(), hashes)
+	if err != nil {
+		panic(err)
+	}
+	m := msg.New(msg.Cgetdata, pay)
 	conn.Write(m.Encode())
 
 	for i := 0; i < len(hashes); i++ {

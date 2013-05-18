@@ -22,8 +22,22 @@ func TestVersion(t *testing.T) {
 		Streams:   []int{1},
 	}
 
-	data := ver.Encode()
-	_, err := VersionDecode(data)
+	data, err := ver.Encode(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = VersionDecode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err = ver.Encode(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = VersionDecode(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,9 +52,15 @@ func TestAddressInfo(t *testing.T) {
 		Port:     19840,
 	}
 
-	data := addr.encode()
-	addressInfoDecode(data)
+	data := addr.p1_encode()
+	p1_addressInfoDecode(data)
 
-	data = addr.encodeShort()
-	addressInfoDecodeShort(data)
+	data = addr.p2_encode()
+	p2_addressInfoDecode(data)
+
+	data = addr.p1_encodeShort()
+	p1_addressInfoDecodeShort(data)
+
+	data = addr.p2_encodeShort()
+	p2_addressInfoDecodeShort(data)
 }
