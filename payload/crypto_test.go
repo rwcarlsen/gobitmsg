@@ -22,6 +22,21 @@ func TestKeyEncode(t *testing.T) {
 	}
 }
 
+func TestPOW(t *testing.T) {
+	data := []byte("hello")
+	trialsPerByte := 10
+	extraLen := 100
+	nonce := DoPOW(trialsPerByte, extraLen, data)
+
+	payload := append(packUint(order, nonce), data...)
+
+	valid := VerifyPOW(trialsPerByte, extraLen, payload)
+
+	if !valid {
+		t.Error("Failed to verify POW")
+	}
+}
+
 func TestVerify(t *testing.T) {
 	k, err := NewKey()
 	if err != nil {

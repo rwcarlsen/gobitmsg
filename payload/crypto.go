@@ -6,7 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	_ "crypto/sha1"
-	"crypto/sha512"
+	_ "crypto/sha512"
 	"encoding/asn1"
 	"math"
 	"math/big"
@@ -17,6 +17,7 @@ import (
 )
 
 var signHash = crypto.SHA1
+var powHash = crypto.SHA512
 
 func getCurve() elliptic.Curve {
 	return kelliptic.S256()
@@ -28,24 +29,44 @@ func FuzzyTime(giveTake time.Duration) time.Time {
 	return t.Add(fuzz)
 }
 
-// proofOfWork returns a pow nonce for data.
-func proofOfWork(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
-	h := sha512.New()
+// DoPOW returns a proof of work nonce for data.
+func DoPOW(trialsPerByte, extraLen int, data []byte) (nonce uint64) {
+	h := powHash.New()
 	h.Write(data)
 	kernel := h.Sum(nil)
 
 	trial := uint64(math.MaxUint64)
 	target := math.MaxUint64 / uint64((len(data)+extraLen+8)*trialsPerByte)
-	for nonce = 0; trial > target; nonce++ {
+	for trial > target {
+		nonce++
 		h.Reset()
 		h.Write(append(packUint(order, nonce), kernel...))
-		h.Write(h.Sum(nil))
+		sum := h.Sum(nil)
+		h.Reset()
+		h.Write(sum)
 		trial = order.Uint64(h.Sum(nil)[:8])
 		if nonce == math.MaxUint64 {
 			panic("payload: Failed to calculate POW")
 		}
 	}
 	return nonce
+}
+
+func VerifyPOW(trialsPerByte, extraLen int, payload []byte) bool {
+	h := powHash.New()
+
+	h.Write(payload[8:])
+	sum := h.Sum(nil)
+	h.Reset()
+	h.Write(payload[:8])
+	h.Write(sum)
+	sum = h.Sum(nil)
+	h.Reset()
+	h.Write(sum)
+	sum = h.Sum(nil)
+
+	pow := order.Uint64(sum[:8])
+	return pow <= math.MaxUint64/uint64((len(payload)+extraLen)*trialsPerByte)
 }
 
 type Key struct {

@@ -54,7 +54,7 @@ func (g *GetPubKey) Encode() []byte {
 	data = append(data, g.RipeHash...)
 
 	if g.powNonce == 0 {
-		g.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
+		g.powNonce = DoPOW(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, g.powNonce), data...)
 }
@@ -73,7 +73,7 @@ type PubKey struct {
 	EncryptKey    *Key
 	TrialsPerByte int
 	ExtraBytes    int
-	signature     []byte // ECDSA from beginning through ExtraBytes
+	signature     []byte // ECDSA from Time through ExtraBytes
 }
 
 func PubKeyDecode(data []byte) (k *PubKey, err error) {
@@ -132,11 +132,6 @@ func (k *PubKey) Encode() []byte {
 	data = append(data, varIntEncode(k.TrialsPerByte)...)
 	data = append(data, varIntEncode(k.ExtraBytes)...)
 
-	if k.powNonce == 0 {
-		k.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
-	}
-	data = append(packUint(order, k.powNonce), data...)
-
 	var err error
 	if k.signature, err = k.SignKey.Sign(data); err != nil {
 		panic("signature failed")
@@ -144,7 +139,10 @@ func (k *PubKey) Encode() []byte {
 	data = append(data, varIntEncode(len(k.signature))...)
 	data = append(data, k.signature...)
 
-	return data
+	if k.powNonce == 0 {
+		k.powNonce = DoPOW(PowTrialsPerByte, PowExtraLen, data)
+	}
+	return append(packUint(order, k.powNonce), data...)
 }
 
 func (k *PubKey) Signature() []byte {
@@ -206,7 +204,7 @@ func (m *Message) Encode() []byte {
 	data = append(data, m.Data...)
 
 	if m.powNonce == 0 {
-		m.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
+		m.powNonce = DoPOW(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, m.powNonce), data...)
 }
@@ -273,7 +271,7 @@ func (b *Broadcast) Encode() []byte {
 	data = append(data, b.Data...)
 
 	if b.powNonce == 0 {
-		b.powNonce = proofOfWork(PowTrialsPerByte, PowExtraLen, data)
+		b.powNonce = DoPOW(PowTrialsPerByte, PowExtraLen, data)
 	}
 	return append(packUint(order, b.powNonce), data...)
 }
