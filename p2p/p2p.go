@@ -217,6 +217,7 @@ func (n *Node) VersionExchange(addr *payload.AddressInfo) {
 // the node at addr.
 func (n *Node) versionExchange(req *VerDat) {
 	resp := &VerDat{}
+	defer func() { n.VerIn <- resp }()
 	defer func() {
 		if r := recover(); r != nil {
 			resp.Err = fmt.Errorf("[ERR] version exchange did not complete (%v)", r)
@@ -249,7 +250,6 @@ func (n *Node) versionExchange(req *VerDat) {
 	if err != nil {
 		panic(err)
 	}
-	defer func() { n.VerIn <- resp }()
 
 	if _, err := conn.Write(msg.New(msg.Cverack, []byte{}).Encode()); err != nil {
 		panic(err)
