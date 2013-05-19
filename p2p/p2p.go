@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	defaultTimeout = 7 * time.Second
-	fanout         = 10 // number of peers to broadcast to
+	defaultTimeout = 4 * time.Second
 )
 
 type VerDat struct {
@@ -133,12 +132,12 @@ func (n *Node) handleConn(conn net.Conn) {
 	}
 }
 
+// VersionExchanges initiates and performs a version exchange sequence with
+// the node at addr.
 func (n *Node) VersionExchange(addr *payload.AddressInfo) {
 	n.verOut <- addr
 }
 
-// versionExchanges initiates and performs a version exchange sequence with
-// the node at addr.
 func (n *Node) versionExchange(addr *payload.AddressInfo) {
 	resp := &VerDat{}
 	defer func() { n.VerIn <- resp }()
