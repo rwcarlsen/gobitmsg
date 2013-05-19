@@ -30,7 +30,7 @@ type Node struct {
 	ObjectsIn  chan *msg.Msg
 	objectsOut chan *msg.Msg
 	VerIn      chan *VerDat
-	verOut     chan *VerDat
+	verOut     chan *payload.AddressInfo
 	MyVer      *payload.Version
 	MyPeers    []*payload.AddressInfo
 	MyInv      map[string][]byte
@@ -67,7 +67,7 @@ func NewNode(ip string, port int, lg *log.Logger) *Node {
 		ObjectsIn:  make(chan *msg.Msg),
 		objectsOut: make(chan *msg.Msg),
 		VerIn:      make(chan *VerDat),
-		verOut:     make(chan *VerDat),
+		verOut:     make(chan *payload.AddressInfo),
 		MyVer:      ver,
 		MyPeers:    []*payload.AddressInfo{},
 		MyInv:      map[string][]byte{},
@@ -95,8 +95,8 @@ func (n *Node) Start() error {
 
 	go func() {
 		for {
-			req := <-n.verOut
-			n.versionExchange(req)
+			addr := <-n.verOut
+			n.versionExchange(addr)
 		}
 	}()
 
@@ -134,6 +134,59 @@ func (n *Node) handleConn(conn net.Conn) {
 	}
 }
 
+func (n *Node) VersionExchange(addr *payload.AddressInfo) {
+	n.verOut <- addr
+}
+
+// versionExchanges initiates and performs a version exchange sequence with
+// the node at addr.
+func (n *Node) versionExchange(addr *payload.AddressInfo) {
+	resp := &VerDat{}
+	defer func() { n.VerIn <- resp }()
+	defer func() {
+		if r := recover(); r != nil {
+			resp.Err = fmt.Errorf("[ERR] version exchange did not complete (%v)", r)
+			n.Log.Print(resp.Err)
+		}
+	}()
+
+	n.Log.Printf("[INFO] version exchange with %v", addr.Addr())
+	conn, err := net.DialTimeout("tcp", addr.Addr(), defaultTimeout)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	n.verOutVerackIn(conn, addr, payload.ProtocolVersion)
+
+	// wait for version message and send verack
+	m := msg.Must(msg.ReadKind(conn, msg.Cversion))
+	resp.Ver, err = payload.VersionDecode(m.Payload())
+	if err != nil {
+		panic(err)
+	}
+	if _, err := conn.Write(msg.New(msg.Cverack, []byte{}).Encode()); err != nil {
+		panic(err)
+	}
+
+	n.sendInvAndAddr(conn, resp.Ver.Protocol())
+
+	// wait for addr and inv messages
+	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
+	resp.Peers, err = payload.AddrDecode(resp.Ver.Protocol(), m.Payload())
+	if err != nil {
+		panic(err)
+	}
+
+	m = msg.Must(msg.ReadKind(conn, msg.Cinv))
+	resp.Inv, err = payload.InventoryDecode(resp.Ver.Protocol(), m.Payload())
+	if err != nil {
+		panic(err)
+	}
+
+	n.Log.Printf("[INFO] version exchange with %v successful", addr.Addr())
+}
+
 func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	resp := &VerDat{}
 	defer func() {
@@ -150,46 +203,14 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	if err != nil {
 		panic(err)
 	}
-
 	defer func() { n.VerIn <- resp }()
 
 	if _, err := conn.Write(msg.New(msg.Cverack, []byte{}).Encode()); err != nil {
 		panic(err)
 	}
 
-	// send version msg and wait for verack
-	vcopy := *n.MyVer
-	vcopy.Timestamp = time.Now()
-	vcopy.ToAddr = resp.Ver.FromAddr
-	pay, err := vcopy.Encode(resp.Ver.Protocol())
-	if err != nil {
-		panic(err)
-	}
-	m = msg.New(msg.Cversion, pay)
-	if _, err := conn.Write(m.Encode()); err != nil {
-		panic(err)
-	}
-
-	msg.Must(msg.ReadKind(conn, msg.Cverack))
-
-	// send addr and inv messages
-	pay, err = payload.AddrEncode(resp.Ver.Protocol(), n.MyPeers...)
-	if err != nil {
-		panic(err)
-	}
-	am := msg.New(msg.Caddr, pay)
-	if _, err := conn.Write(am.Encode()); err != nil {
-		panic(err)
-	}
-
-	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.invList())
-	if err != nil {
-		panic(err)
-	}
-	im := msg.New(msg.Cinv, pay)
-	if _, err := conn.Write(im.Encode()); err != nil {
-		panic(err)
-	}
+	n.verOutVerackIn(conn, resp.Ver.FromAddr, resp.Ver.Protocol())
+	n.sendInvAndAddr(conn, resp.Ver.Protocol())
 
 	// wait for addr and inv messages
 	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
@@ -206,57 +227,8 @@ func (n *Node) versionSequence(m *msg.Msg, conn net.Conn) {
 	n.Log.Printf("[INFO] version sequence with %v successful", conn.RemoteAddr())
 }
 
-func (n *Node) VersionExchange(addr *payload.AddressInfo) {
-	vcopy := *n.MyVer
-	vcopy.Timestamp = time.Now()
-	vcopy.ToAddr = addr
-	n.verOut <- &VerDat{&vcopy, n.MyPeers, n.invList(), nil}
-}
-
-// versionExchanges initiates and performs a version exchange sequence with
-// the node at addr.
-func (n *Node) versionExchange(req *VerDat) {
-	resp := &VerDat{}
-	defer func() { n.VerIn <- resp }()
-	defer func() {
-		if r := recover(); r != nil {
-			resp.Err = fmt.Errorf("[ERR] version exchange did not complete (%v)", r)
-			n.Log.Print(resp.Err)
-		}
-	}()
-
-	n.Log.Printf("[INFO] version exchange with %v", req.Ver.ToAddr.Addr())
-	conn, err := net.DialTimeout("tcp", req.Ver.ToAddr.Addr(), defaultTimeout)
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
-
-	// send version msg and wait for verack
-	pay, err := req.Ver.Encode(payload.ProtocolVersion)
-	if err != nil {
-		panic(err)
-	}
-	m := msg.New(msg.Cversion, pay)
-	if _, err := conn.Write(m.Encode()); err != nil {
-		panic(err)
-	}
-
-	msg.Must(msg.ReadKind(conn, msg.Cverack))
-
-	// wait for version message and send verack
-	m = msg.Must(msg.ReadKind(conn, msg.Cversion))
-	resp.Ver, err = payload.VersionDecode(m.Payload())
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err := conn.Write(msg.New(msg.Cverack, []byte{}).Encode()); err != nil {
-		panic(err)
-	}
-
-	// send addr and inv messages
-	pay, err = payload.AddrEncode(resp.Ver.Protocol(), n.MyPeers...)
+func (n *Node) sendInvAndAddr(conn net.Conn, proto uint32) {
+	pay, err := payload.AddrEncode(proto, n.MyPeers...)
 	if err != nil {
 		panic(err)
 	}
@@ -265,7 +237,7 @@ func (n *Node) versionExchange(req *VerDat) {
 		panic(err)
 	}
 
-	pay, err = payload.InventoryEncode(resp.Ver.Protocol(), n.invList())
+	pay, err = payload.InventoryEncode(proto, n.invList())
 	if err != nil {
 		panic(err)
 	}
@@ -273,21 +245,21 @@ func (n *Node) versionExchange(req *VerDat) {
 	if _, err := conn.Write(im.Encode()); err != nil {
 		panic(err)
 	}
+}
 
-	// wait for addr and inv messages
-	m = msg.Must(msg.ReadKind(conn, msg.Caddr))
-	resp.Peers, err = payload.AddrDecode(resp.Ver.Protocol(), m.Payload())
+func (n *Node) verOutVerackIn(conn net.Conn, to *payload.AddressInfo, proto uint32) {
+	vcopy := *n.MyVer
+	vcopy.Timestamp = time.Now()
+	vcopy.ToAddr = to
+	pay, err := vcopy.Encode(proto)
 	if err != nil {
 		panic(err)
 	}
-
-	m = msg.Must(msg.ReadKind(conn, msg.Cinv))
-	resp.Inv, err = payload.InventoryDecode(resp.Ver.Protocol(), m.Payload())
-	if err != nil {
+	m := msg.New(msg.Cversion, pay)
+	if _, err := conn.Write(m.Encode()); err != nil {
 		panic(err)
 	}
-
-	n.Log.Printf("[INFO] version exchange with %v successful", req.Ver.ToAddr.Addr())
+	msg.Must(msg.ReadKind(conn, msg.Cverack))
 }
 
 func (n *Node) Broadcast(m *msg.Msg) {
