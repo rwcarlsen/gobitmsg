@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"time"
 
@@ -28,7 +27,7 @@ type Node struct {
 	Addr       string
 	Log        *log.Logger
 	ObjectsIn  chan *msg.Msg
-	objectsOut chan *msg.Msg
+	objectsOut chan broadcastReq
 	VerIn      chan *VerDat
 	verOut     chan *payload.AddressInfo
 	MyVer      *payload.Version
@@ -65,7 +64,7 @@ func NewNode(ip string, port int, lg *log.Logger) *Node {
 		Addr:       addr.Addr(),
 		Log:        lg,
 		ObjectsIn:  make(chan *msg.Msg),
-		objectsOut: make(chan *msg.Msg),
+		objectsOut: make(chan broadcastReq),
 		VerIn:      make(chan *VerDat),
 		verOut:     make(chan *payload.AddressInfo),
 		MyVer:      ver,
@@ -102,8 +101,8 @@ func (n *Node) Start() error {
 
 	go func() {
 		for {
-			m := <-n.objectsOut
-			n.broadcastObj(m)
+			req := <-n.objectsOut
+			n.broadcastObj(req)
 		}
 	}()
 
@@ -262,32 +261,24 @@ func (n *Node) verOutVerackIn(conn net.Conn, to *payload.AddressInfo, proto uint
 	msg.Must(msg.ReadKind(conn, msg.Cverack))
 }
 
-func (n *Node) Broadcast(m *msg.Msg) {
-	n.objectsOut <- m
+type broadcastReq struct {
+	m *msg.Msg
+	peers []*payload.Version
 }
 
-func (n *Node) broadcastObj(m *msg.Msg) {
-	_ = m
+func (n *Node) Broadcast(m *msg.Msg, peers ...*payload.Version) {
+	n.objectsOut <- broadcastReq{m, peers}
+}
 
-	indices := rand.Perm(len(n.MyPeers))
-
-	success := 0
-	for _, ind := range indices {
-		peer := n.MyPeers[ind]
-		conn, err := net.DialTimeout("tcp", peer.Addr(), defaultTimeout)
+func (n *Node) broadcastObj(req broadcastReq) {
+	for _, p := range req.peers {
+		conn, err := net.DialTimeout("tcp", p.FromAddr.Addr(), defaultTimeout)
 		if err != nil {
 			continue
 		}
-		if _, err := conn.Write(m.Encode()); err != nil {
-			continue
-		}
+		conn.Write(req.m.Encode())
 		conn.Close()
-		if success++; success == fanout {
-			break
-		}
 	}
-
-	panic("not implemented")
 }
 
 func (n *Node) respondGetData(m *msg.Msg, conn net.Conn) {
